@@ -15,7 +15,6 @@ def load_model(model_id="meta-llama/Llama-3.2-3B"):
         torch_dtype=torch.float16, 
         device_map=device
     )
-
     model.to(device)
     tokenizer.pad_token = tokenizer.eos_token
     return model, tokenizer
@@ -63,7 +62,7 @@ def load_dataset_from_file(grammar_file, model, tokenizer, batch_size=100):
     return positive_encodings, negative_encodings
 
 
-def load_complete_dataset(data_dir='blimp/data/', batch_size=100, n_files=None):
+def load_complete_dataset(data_dir='../data/blimp/', batch_size=100, n_files=None):
     model, tokenizer = load_model()
     
     positive_encodings, negative_encodings = [], []
