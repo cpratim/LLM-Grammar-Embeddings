@@ -1,7 +1,7 @@
 # Fdb version 4
-["pdflatex"] 1739509676.01562 "/scratch/pratim/grammar/paper/main.tex" "main.pdf" "main" 1739509676.80393 0
-  "/etc/texmf/web2c/texmf.cnf" 1729191210.63917 475 c0e671620eb5563b2130f56340a5fde8 ""
-  "/scratch/pratim/grammar/paper/main.tex" 1739509675.66677 16036 4f3dadc40d9e9f14797795ebc0dfae49 ""
+["pdflatex"] 1740341603.45228 "/scratch/f00561n/LLM-Grammar-Embeddings/paper/main.tex" "main.pdf" "main" 1740341604.43506 0
+  "/etc/texmf/web2c/texmf.cnf" 1732220345.55286 475 c0e671620eb5563b2130f56340a5fde8 ""
+  "/scratch/f00561n/LLM-Grammar-Embeddings/paper/main.tex" 1740341552.35963 16474 86e66d22f9a602c86fc210c0623032e5 ""
   "/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc" 1165713224 4850 80dc9bab7f31fb78a000ccfed0e27cab ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/adobe/helvetic/phvr8r.tfm" 1136768653 4712 9ef4d7d106579d4b136e1529e1a4533c ""
@@ -110,12 +110,12 @@
   "/usr/share/texmf/fonts/enc/dvips/cm-super/cm-super-t1.enc" 1636152094 2971 def0b6c1f0b107b3b936def894055589 ""
   "/usr/share/texmf/fonts/type1/public/cm-super/sftt1000.pfb" 1636152094 169201 9ebf99020dde51a5086e186761a34e8f ""
   "/usr/share/texmf/web2c/texmf.cnf" 1707919699 40399 f2c302f7d2af602abb742093540a5834 ""
-  "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1729192256.80162 5472669 54eaf61a88b6b7896ebd0dac973cb29c ""
-  "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1729192283 8214294 66b6c870a928363a9e63f4870fb2faae ""
-  "main.aux" 1739509676.71379 3026 fb0e7ee39317ca79645dc18705b4cf47 "pdflatex"
-  "main.out" 1739509676.71379 2776 a23b4d06677004598d1f18707aa886a2 "pdflatex"
-  "main.tex" 1739509675.66677 16036 4f3dadc40d9e9f14797795ebc0dfae49 ""
-  "neurips_2024.sty" 1739509443.21638 11550 4412c3d1f5b63ffc23832100a2bb5e33 ""
+  "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1732221081.15889 5472669 54eaf61a88b6b7896ebd0dac973cb29c ""
+  "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1732221167 8214142 d960b5a151a117bb6d4b57415aa2b68b ""
+  "main.aux" 1740341604.32068 3026 bbd387a5b1a6ee7717064524c76ea830 "pdflatex"
+  "main.out" 1740341604.32168 2776 a23b4d06677004598d1f18707aa886a2 "pdflatex"
+  "main.tex" 1740341552.35963 16474 86e66d22f9a602c86fc210c0623032e5 ""
+  "neurips_2024.sty" 1739525930.40585 11550 4412c3d1f5b63ffc23832100a2bb5e33 ""
   (generated)
   "main.aux"
   "main.log"
