@@ -4,20 +4,115 @@ from transformers.models.llama.modeling_llama import (
     apply_rotary_pos_emb, 
     eager_attention_forward, 
     logger, 
-    ALL_ATTENTION_FUNCTIONS
+    ALL_ATTENTION_FUNCTIONS,
+    repeat_kv
 )
-
+import numpy as np
 from typing import Tuple, Optional, Unpack, Callable, Dict, List
 import torch
+import torch.nn as nn
+from util.model import clear_cuda_cache
 
 from transformers.cache_utils import Cache
 from transformers.modeling_flash_attention_utils import FlashAttentionKwargs
 
 
-class CustomAttention(LlamaAttention):
-    def __init__(self, config, layer_idx, disable_idx=[]):
+def print_matrix(matrix: np.ndarray):
+    for row in matrix:
+        for col in row:
+            print(f"{col:.2f}", end=" ")
+        print()
+
+
+def increase_entropy(distribution, power=2, percentile=0.2):
+    mean = torch.mean(distribution)
+    deviation = distribution - mean
+    
+    over_mean = torch.clamp(torch.sign(deviation) * (deviation) ** power, 0, 1)
+    under_mean = torch.clamp(torch.sign(deviation) * (deviation) ** power, -1, 0)
+    
+    over_sum = torch.sum(over_mean)
+    under_sum = torch.sum(under_mean)
+    
+    sub = torch.zeros_like(distribution)
+    add = torch.zeros_like(distribution)
+    
+    if over_sum > 0:
+        sub = (over_mean / over_sum) * percentile
+    
+    if under_sum < 0:
+        add = (under_mean / under_sum) * percentile
+    
+    new_dist = distribution - sub + add
+    return new_dist
+
+
+def increase_entropy_batch(attn_weights, power=2, percentile=0.1):
+    # Extract the last row for all samples and heads
+    last_row = attn_weights[:, :, -1, :]
+    # Calculate deviation from mean (along the token dimension)
+    mean = torch.mean(last_row, dim=-1, keepdim=True)
+    deviation = last_row - mean
+    # Calculate components above and below mean
+    over_mean = torch.clamp(torch.sign(deviation) * (deviation) ** power, 0, 1)
+    under_mean = torch.clamp(torch.sign(deviation) * (deviation) ** power, -1, 0)
+    # Handle potential division by zero with safe division
+    over_sum = torch.sum(over_mean, dim=-1, keepdim=True)
+    under_sum = torch.sum(under_mean, dim=-1, keepdim=True)
+    # Initialize sub and add tensors
+    sub = torch.zeros_like(last_row)
+    add = torch.zeros_like(last_row)
+    # Safely divide using where operation instead of masking
+    sub = torch.where(
+        over_sum > 0,
+        (over_mean / over_sum.clamp(min=1e-10)) * percentile,
+        torch.zeros_like(over_mean)
+    )
+    add = torch.where(
+        under_sum < 0,
+        (under_mean / under_sum.clamp(max=-1e-10)) * percentile,
+        torch.zeros_like(under_mean)
+    )
+    # Calculate new distribution
+    new_last_row = last_row - sub + add
+    # Create a copy of the original tensor and update the last row
+    result = attn_weights.clone()
+    result[:, :, -1, :] = new_last_row
+    
+    return result
+
+def raise_entropy(attn_weights: torch.Tensor) -> torch.Tensor:
+
+    attn_matrix = attn_weights[0, 0].detach().cpu().numpy()
+    print_matrix(attn_matrix)
+    print()
+    return attn_weights
+
+
+class BlockedAttention(LlamaAttention):
+    def __init__(self, 
+        config, 
+        layer_idx, 
+        disable_idx: Optional[List[int]] = [], 
+        raise_entropy_idx: Optional[List[int]] = [], 
+        lower_entropy_idx: Optional[List[int]] = [],
+        disable_positional_encoding: Optional[bool] = False
+    ):
         super().__init__(config, layer_idx)
         self.disable_idx = disable_idx
+        self.raise_entropy_idx = raise_entropy_idx
+        self.lower_entropy_idx = lower_entropy_idx
+        self.disable_positional_encoding = disable_positional_encoding
+
+    def disable_head(self, head_idx: int):
+        self.disable_idx.append(head_idx)
+
+    def enable_head(self, head_idx: int):
+        if head_idx in self.disable_idx:
+            self.disable_idx.remove(head_idx)
+
+    def get_n_heads_per_layer(self):
+        return self.config.n_head
 
     def forward(
         self,
@@ -34,16 +129,31 @@ class CustomAttention(LlamaAttention):
         query_states = self.q_proj(hidden_states).view(hidden_shape).transpose(1, 2)
         key_states = self.k_proj(hidden_states).view(hidden_shape).transpose(1, 2)
         value_states = self.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)
-
         cos, sin = position_embeddings
-        query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
+        
+        if not self.disable_positional_encoding:
+            query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
 
         if past_key_value is not None:
             # sin and cos are specific to RoPE models; cache_position needed for the static cache
             cache_kwargs = {"sin": sin, "cos": cos, "cache_position": cache_position}
             key_states, value_states = past_key_value.update(key_states, value_states, self.layer_idx, cache_kwargs)
 
+        # key_states = repeat_kv(key_states, self.num_key_value_groups)
+        # value_states = repeat_kv(value_states, self.num_key_value_groups)
+
+        # attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) * self.scaling
+        # if attention_mask is not None:
+        #     causal_mask = attention_mask[:, :, :, : key_states.shape[-2]]
+        #     attn_weights = attn_weights + causal_mask
+
+        # attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query_states.dtype)
+        # attn_weights = nn.functional.dropout(attn_weights, p=self.attention_dropout, training=self.training)
+        # attn_weights = increase_entropy_batch(attn_weights)
+        # attn_output = torch.matmul(attn_weights, value_states)
+        # attn_output = attn_output.transpose(1, 2).contiguous()
         attention_interface: Callable = eager_attention_forward
+        # print(f"self.config._attn_implementation: {self.config._attn_implementation}")
         if self.config._attn_implementation != "eager":
             if self.config._attn_implementation == "sdpa" and kwargs.get("output_attentions", False):
                 logger.warning_once(
@@ -63,7 +173,7 @@ class CustomAttention(LlamaAttention):
             scaling=self.scaling,
             **kwargs,
         )
-        
+
         if self.disable_idx:
             attn_output[:, :, self.disable_idx, :] = 0
 
@@ -76,13 +186,58 @@ def load_blocked_attention_model(model_id: str, disable_idx: Dict[int, List[int]
     model = LlamaForCausalLM.from_pretrained(model_id)
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     for idx, layer in enumerate(model.model.layers):
-        layer.self_attn = CustomAttention(layer.self_attn.config, idx, [] if idx not in disable_idx else disable_idx[idx])
+        cust_attn = BlockedAttention(layer.self_attn.config, idx, [] if idx not in disable_idx else disable_idx[idx])
+        cust_attn.load_state_dict(layer.self_attn.state_dict())
+        layer.self_attn = cust_attn
     model.to(device)
     return model, tokenizer
 
+
+def load_altered_attention_model(model_id: str, 
+                                 device: torch.device,
+                                 disable_idx: Dict[int, List[int]] = {},
+                                 disable_positional_encoding: bool = False
+                                 ) -> Tuple[LlamaForCausalLM, AutoTokenizer]:
+    model = LlamaForCausalLM.from_pretrained(
+        model_id,
+        device_map=device,
+    )
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_id,
+        device_map=device,
+    )
+    tokenizer.pad_token = tokenizer.eos_token
+    for idx, layer in enumerate(model.model.layers):
+        blocked_attn = BlockedAttention(
+            layer.self_attn.config,
+            idx,
+            [] if idx not in disable_idx else disable_idx[idx],
+            disable_positional_encoding=disable_positional_encoding
+        )
+        blocked_attn.load_state_dict(layer.self_attn.state_dict())
+        layer.self_attn = blocked_attn
+        clear_cuda_cache()
+    model.to(device)
+    return model, tokenizer
+
+def disable_head(model: LlamaForCausalLM, layer_idx: int, head_idx: int):
+    model.model.layers[layer_idx].self_attn.disable_head(head_idx)
+
+def enable_head(model: LlamaForCausalLM, layer_idx: int, head_idx: int):
+    model.model.layers[layer_idx].self_attn.enable_head(head_idx)
+
+
+def load_spiked_attention_model(model_id: str, device: torch.device) -> Tuple[LlamaForCausalLM, AutoTokenizer]:
+    pass
+
+
 if __name__ == "__main__":
-    model_id = "meta-llama/Llama-3.2-3B-Instruct"
+    model_id = "meta-llama/Llama-3.2-1B-Instruct"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     disable_idx = {0: [0, 1, 2, 3,]}
-    model, tokenizer = load_blocked_attention_model(model_id, disable_idx, device)
+    model, tokenizer = load_altered_attention_model(model_id, device, disable_idx)
     print(model)
+    input_ids = tokenizer("Hello, how are you?", return_tensors="pt").to(device)
+    input_ids = {k: v.to(device) for k, v in input_ids.items()}
+    output = model.generate(**input_ids, max_new_tokens=10)
+    print(tokenizer.decode(output[0], skip_special_tokens=True))
