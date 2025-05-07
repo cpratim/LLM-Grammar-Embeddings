@@ -80,6 +80,46 @@ __question_format_binary_arithmetic = """Is this arithmetic expression correct?
 
 ONLY OUTPUT '1' OR '0', NOTHING ELSE."""
 
+__system_message_multiple_choice_word_problems = """You are a helpful assistant that will help me figure out which statement is correct.
+You should only output the number of the correct statement, '1' if the first statement is correct, '2' if the second statement is correct.
+
+ONLY OUTPUT THE NUMBER OF THE CORRECT SENTENCE, NOTHING ELSE.
+
+For example:
+Which statement is correct?
+1) I ate 2 apples and 2 oranges, the total number of fruits I ate is 4.
+2) I ate 2 apples and 2 oranges, the total number of fruits I ate is 5.
+
+1"""
+
+__question_format_multiple_choice_word_problems = """Which statement is correct?
+1) {sentence_1}
+2) {sentence_2}
+
+ONLY OUTPUT THE NUMBER OF THE CORRECT SENTENCE (1 OR 2), NOTHING ELSE."""
+
+__system_message_binary_word_problems = """You are a helpful assistant that will help me figure out if a statement is correct.
+You should only output '1' if the statement is correct, and '0' if it is not.
+
+ONLY OUTPUT '1' OR '0', NOTHING ELSE.
+
+For example:
+Is this statement correct?
+1) I ate 2 apples and 2 oranges, the total number of fruits I ate is 4.
+
+1"""
+
+__question_format_binary_word_problems = """Is this statement correct?
+1) {sentence_1}
+
+ONLY OUTPUT '1' OR '0', NOTHING ELSE."""
+
+__question_format_multiple_choice_word_problems = """Which statement is correct?
+1) {sentence_1}
+2) {sentence_2}
+
+ONLY OUTPUT THE NUMBER OF THE CORRECT SENTENCE (1 OR 2), NOTHING ELSE."""   
+
 
 def parse_output(output):
     if output not in ["0", "1", "2"]:
@@ -89,14 +129,17 @@ def parse_output(output):
 
 
 def load_LLM_messages_multiple_choice(
-    shots, grammar=True, randomize=False, use_system_message=True
+    shots, type_=True, randomize=False, use_system_message=True
 ):
-    if grammar:
+    if type_ == "grammar":
         system_message = __system_message_multiple_choice_grammar
         question_format = __question_format_multiple_choice_grammar
-    else:
+    elif type_ == "arithmetic":
         system_message = __system_message_multiple_choice_arithmetic
         question_format = __question_format_multiple_choice_arithmetic
+    elif type_ == "word_problems":
+        system_message = __system_message_multiple_choice_word_problems
+        question_format = __question_format_multiple_choice_word_problems
 
     messages = []
     if use_system_message:
@@ -126,14 +169,17 @@ def load_LLM_messages_multiple_choice(
 
 
 def load_LLM_messages_binary(
-    shots, grammar=True, randomize=False, use_system_message=True
+    shots, type_=True, randomize=False, use_system_message=True
 ):
-    if grammar:
+    if type_ == "grammar":
         system_message = __system_message_binary_grammar
         question_format = __question_format_binary_grammar
-    else:
+    elif type_ == "arithmetic":
         system_message = __system_message_binary_arithmetic
         question_format = __question_format_binary_arithmetic
+    elif type_ == "word_problems":
+        system_message = __system_message_binary_word_problems
+        question_format = __question_format_binary_word_problems
     messages = []
     if use_system_message:
         messages.append({"role": "system", "content": system_message})
@@ -185,15 +231,17 @@ def get_mutiple_choice_prompt(
 
 
 def get_binary_prompt(
-    shots, tokenizer, good, bad, grammar=True, use_system_message=True
+    shots, tokenizer, good, bad, type_=True, use_system_message=True
 ):
     template = load_LLM_messages_binary(
-        shots, grammar, use_system_message=use_system_message
+        shots, type_, use_system_message=use_system_message
     )
-    if grammar:
+    if type_ == "grammar":
         question_format = __question_format_binary_grammar
-    else:
+    elif type_ == "arithmetic":
         question_format = __question_format_binary_arithmetic
+    elif type_ == "word_problems":
+        question_format = __question_format_binary_word_problems
     unif = np.random.uniform(0, 1)
     sentences = [good, bad] if unif < 0.5 else [bad, good]
     template.append(
@@ -213,7 +261,7 @@ def load_llm_generations(
     device,
     n_shot,
     type_="mcq",
-    grammar=True,
+    problem_type="grammar",
     use_system_message=True,
 ):
     shots = sample(data, n_shot)
@@ -228,16 +276,16 @@ def load_llm_generations(
                 tokenizer,
                 example["good"],
                 example["bad"],
-                grammar,
+                problem_type,
                 use_system_message,
             )
-        elif type_ == "binary":
+        elif type_ == "bin":
             formatted_chat, answer = get_binary_prompt(
                 shots,
                 tokenizer,
                 example["good"],
                 example["bad"],
-                grammar,
+                problem_type,
                 use_system_message,
             )
         llm_output = generation_pipeline(
@@ -246,6 +294,9 @@ def load_llm_generations(
             max_new_tokens=10,
             do_sample=False,
         )
+        # print(example)
+        # print(formatted_chat)
+        # print()
         generations.append(
             {
                 "good": example["good"],
@@ -268,22 +319,29 @@ def get_eos_states_batch(model, tokenizer, device, formatted_chat):
     return ans.transpose(1, 0, 2)
 
 
-def get_eos_states(model, tokenizer, device, formatted_chat):
+def get_eos_states(model, tokenizer, device, formatted_chat, get_attentions=False):
     tokens = tokenizer(formatted_chat, return_tensors="pt").to(device)
     with torch.no_grad():
-        forward_pass = model(**tokens, output_hidden_states=True, return_dict=True)
+        forward_pass = model(**tokens, output_hidden_states=True, output_attentions=get_attentions, return_dict=True)
     ans = [s[0, -1, :].detach().cpu().numpy() for s in forward_pass.hidden_states]
     return ans
 
 
-def load_embeddings_dataset(
+def get_head_attentions(model, tokenizer, device, formatted_chat):
+    tokens = tokenizer(formatted_chat, return_tensors="pt").to(device)
+    with torch.no_grad():
+        forward_pass = model(**tokens, output_attentions=True, return_dict=True)
+    attentions = np.array([s.detach().cpu().numpy() for s in forward_pass.attentions])
+    return attentions
+
+def load_attentions_dataset(
     data,
     model,
     tokenizer,
     device,
     n_shot=1,
     types_=["mcq", "bin", "raw"],
-    grammar=True,
+    problem_type="grammar",
     use_tqdm=True,
     use_system_message=True,
 ):
@@ -301,7 +359,81 @@ def load_embeddings_dataset(
                     tokenizer,
                     example["good"],
                     example["bad"],
-                    grammar,
+                    problem_type,
+                    use_system_message=use_system_message,
+                )
+                embeddings["mcq"].append(
+                    {
+                        "attentions": get_head_attentions(
+                            model, tokenizer, device, formatted_chat
+                        ),
+                        "answer": answer,
+                    }
+                )
+            if "bin" in types_:
+                formatted_chat, answer = get_binary_prompt(
+                    shots,
+                    tokenizer,
+                    example["good"],
+                    example["bad"],
+                    problem_type,
+                    use_system_message=use_system_message,
+                )
+                embeddings["bin"].append(
+                    {
+                        "attentions": get_head_attentions(
+                            model, tokenizer, device, formatted_chat
+                        ),
+                        "answer": answer,
+                    }
+                )
+            if "raw" in types_:
+                embeddings["raw"].append(
+                    {
+                        "attentions": get_head_attentions(
+                            model, tokenizer, device, example["good"]
+                        ),
+                        "answer": 1,
+                    }
+                )
+                embeddings["raw"].append(
+                    {
+                        "attentions": get_head_attentions(
+                            model, tokenizer, device, example["bad"]
+                        ),
+                        "answer": 0,
+                    }
+                )
+        clear_cuda_cache()
+    return embeddings
+
+
+def load_embeddings_dataset(
+    data,
+    model,
+    tokenizer,
+    device,
+    n_shot=1,
+    types_=["mcq", "bin", "raw"],
+    problem_type="grammar",
+    use_tqdm=True,
+    use_system_message=True,
+):
+    shots = sample(data, n_shot)
+    embeddings = {t: [] for t in types_}
+    if use_tqdm:
+        iterator = tqdm(enumerate(data))
+    else:
+        iterator = enumerate(data)
+    for _, example in iterator:
+        with torch.no_grad():
+            if "mcq" in types_:
+                formatted_chat, answer = get_mutiple_choice_prompt(
+                    shots,
+                    tokenizer,
+                    example["good"],
+                    example["bad"],
+                    problem_type,
                     use_system_message=use_system_message,
                 )
                 embeddings["mcq"].append(
@@ -318,7 +450,7 @@ def load_embeddings_dataset(
                     tokenizer,
                     example["good"],
                     example["bad"],
-                    grammar,
+                    problem_type,
                     use_system_message=use_system_message,
                 )
                 embeddings["bin"].append(
@@ -357,7 +489,7 @@ def load_embeddings_dataset_batch(
     device,
     n_shot=1,
     types_=["mcq", "bin", "raw"],
-    grammar=True,
+    problem_type="grammar",
     batch_size=25,
     use_tqdm=True,
     use_system_message=True,
@@ -378,7 +510,7 @@ def load_embeddings_dataset_batch(
                     tokenizer,
                     example["good"],
                     example["bad"],
-                    grammar,
+                    problem_type,
                     use_system_message,
                 )
             mcq_formatted_chats.append(formatted_chat)
@@ -400,7 +532,7 @@ def load_embeddings_dataset_batch(
                     tokenizer,
                     example["good"],
                     example["bad"],
-                    grammar,
+                    problem_type,
                     use_system_message,
                 )
                 bin_formatted_chats.append(formatted_chat)

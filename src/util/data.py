@@ -3,7 +3,7 @@ import pickle
 import os
 import numpy as np
 from tqdm import tqdm
-
+from random import uniform
 
 def load_grammar_data(file_path):
     with open(file_path, "r") as f:
@@ -25,12 +25,7 @@ def load_combined_grammar_data(data_path: str = "../data/blimp", n_sample: int =
 
     data = []
     for example in combined_grammar_data:
-        data.append(
-            {
-                "good": example["sentence_good"],
-                "bad": example["sentence_bad"],
-            }
-        )
+        data.append(example)
     return data
 
 
@@ -61,7 +56,7 @@ def load_grammar_data_by_category(
 
 
 def load_numerical_data(
-    data_path: str = "../data/arithmetic/addition.jsonl",
+    data_path: str = "../data/arithmetic/addition_subtraction.jsonl",
     margin: int = 25,
     use_tqdm: bool = False,
 ):
@@ -75,12 +70,26 @@ def load_numerical_data(
                 "good": example["good"],
                 "bad": (
                     example[f"bad_p_{margin}"]
-                    if np.random.rand() < 0.5
+                    if uniform(0, 1) < 0.5
                     else example[f"bad_m_{margin}"]
                 ),
             }
         )
     return ret_data
+
+
+def load_word_problems_data(
+    data_path: str = "../data/word_problems/fill_in_addition_subtraction_simple.jsonl",
+    use_tqdm: bool = False,
+):
+    data = []
+    with open(data_path, "r") as f:
+        for line in f:
+            try:
+                data.append(json.loads(line))
+            except:
+                print(line)
+    return data
 
 
 def load_hidden_data(model_name, grammar_name, data_path="../data/blimp-hidden"):

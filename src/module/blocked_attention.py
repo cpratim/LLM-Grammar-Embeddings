@@ -11,7 +11,7 @@ from transformers.models.gemma2.modeling_gemma2 import (
     Gemma2Attention,
 )
 import numpy as np
-from typing import Tuple, Optional, Unpack, Callable, Dict, List
+from typing import Tuple, Optional, Unpack, Callable, Dict, List, Set
 import torch
 import torch.nn as nn
 from util.model import clear_cuda_cache
@@ -98,17 +98,17 @@ class GemmaBlockedAttention(Gemma2Attention):
         self,
         config,
         layer_idx,
-        disable_idx: Optional[List[int]] = [],
+        disable_idx: Optional[Set[int]] = {},
         disable_positional_encoding: Optional[bool] = False,
     ):
         super().__init__(config, layer_idx)
-        self.disable_idx = disable_idx
+        self.disable_idx = set(disable_idx)
         self.disable_positional_encoding = disable_positional_encoding
         self.save_model_dimensions = True if layer_idx == 0 else False
         self.model_dimensions = None
 
     def disable_head(self, head_idx: int):
-        self.disable_idx.append(head_idx)
+        self.disable_idx.add(head_idx)
 
     def enable_head(self, head_idx: int):
         if head_idx in self.disable_idx:
@@ -189,8 +189,8 @@ class GemmaBlockedAttention(Gemma2Attention):
         )
 
         if self.disable_idx:
-            # print(self.disable_idx)
-            attn_output[:, :, np.array(self.disable_idx), :] = 0
+            disable_idx = np.array(list(self.disable_idx))
+            attn_output[:, :, disable_idx, :] = 0
 
         if self.save_model_dimensions:
             self.model_dimensions = attn_output.shape[-2]
@@ -205,9 +205,9 @@ class LlamaBlockedAttention(LlamaAttention):
         self,
         config,
         layer_idx,
-        disable_idx: Optional[List[int]] = [],
-        raise_entropy_idx: Optional[List[int]] = [],
-        lower_entropy_idx: Optional[List[int]] = [],
+        disable_idx: Optional[Set[int]] = {},
+        raise_entropy_idx: Optional[Set[int]] = {},
+        lower_entropy_idx: Optional[Set[int]] = {},
         disable_positional_encoding: Optional[bool] = False,
     ):
         super().__init__(config, layer_idx)
@@ -219,7 +219,7 @@ class LlamaBlockedAttention(LlamaAttention):
         self.model_dimensions = None
 
     def disable_head(self, head_idx: int):
-        self.disable_idx.append(head_idx)
+        self.disable_idx.add(head_idx)
 
     def enable_head(self, head_idx: int):
         if head_idx in self.disable_idx:
@@ -297,7 +297,8 @@ class LlamaBlockedAttention(LlamaAttention):
             **kwargs,
         )
         if self.disable_idx:
-            attn_output[:, :, self.disable_idx, :] = 0
+            disable_idx = np.array(list(self.disable_idx))
+            attn_output[:, :, disable_idx, :] = 0
         if self.save_model_dimensions:
             self.model_dimensions = attn_output.shape[-2]
         attn_output = attn_output.reshape(*input_shape, -1).contiguous()
@@ -366,7 +367,9 @@ def get_model_dimensions(
 def get_disabled_heads(model: AutoModelForCausalLM):
     disabled = {}
     for layer in range(len(model.model.layers)):
-        disabled[layer] = model.model.layers[layer].self_attn.disable_idx
+        disabled_idx = model.model.layers[layer].self_attn.disable_idx
+        if len(disabled_idx) > 0:
+            disabled[layer] = disabled_idx
     return disabled
 
 

@@ -29,8 +29,28 @@
 \usepackage{graphicx}       % for images
 \usepackage{adjustbox}      % for figure positioning
 \usepackage{amsmath}        % for align environment
+\usepackage{mathtools}      % for \coloneqq, :=, etc.
+\usepackage{enumitem}      % customised lists (needed for [label=..., itemsep=...] syntax)
+\setlist[enumerate]{label=(\arabic*), leftmargin=*, itemsep=2pt}
+% --- extras for algorithm and example boxes ---
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+\usepackage{mdframed}
+\usepackage{setspace}
 
-\title{Unveiling the Syntax Within: Interpreting Grammar Embeddings in Small-Scale LLMs}
+% lightly‑coloured framed environment for data illustrations
+\newmdenv[
+  backgroundcolor=gray!8,
+  roundcorner=4pt,
+  skipabove=\topsep,
+  skipbelow=\topsep,
+  innertopmargin=6pt,
+  innerbottommargin=6pt,
+  innerleftmargin=6pt,
+  innerrightmargin=6pt
+]{examplebox}
+
+\title{Unveiling Linguistic and Mathematical Knowledge: Interpreting Grammar and Arithmetic Embeddings in Small-Scale LLMs}
 
 \author{%
   Pratim Chowdhary\thanks{Use footnote for providing further information
@@ -57,90 +77,338 @@
 \maketitle
 
 \begin{abstract}
-  We investigate how grammatical knowledge is embedded within small language models (1-8B parameters), an understudied yet practically important class of LLMs. Through systematic analysis of Meta's Llama, Gemma, and Qwen model families using the BLiMP benchmark of linguistic minimal pairs, we examine grammatical representations across different architectures and parameter scales. Our findings reveal that grammatical knowledge scales non-uniformly, with certain model families demonstrating specific grammatical strengths independent of size. We observe complex grammatical phenomena showing non-linear scaling patterns, while others plateau quickly. Notably, smaller models from certain architectures sometimes outperform larger models from different families on specific grammatical tasks, suggesting architectural inductive biases significantly influence grammatical knowledge acquisition. This work provides insights into grammar representation in contemporary LLMs with implications for model design and enhancement of grammatical competence in resource-constrained deployment scenarios.
-  \end{abstract}
+Small transformer language models ($\leq$10 B parameters) already solve a surprising range of grammatical and numerical tasks. But \emph{which} internal components drive each capability—and how much circuitry is reused across domains—remains unclear. We study three task families—synthetic arithmetic verification, arithmetic word-problems, and grammatical acceptability—and trace responsibility down to the level of individual attention heads. Using a causal ablation-and-pruning procedure that extracts a \emph{Minimum-Sufficient Head Circuit} (MSHC) for each task, we show that only 10-20 heads (0.4 \% of parameters) are needed to recover 90 \% of full-model accuracy in the models we analyse (Gemma-9B, Llama-8B, Qwen-8B). The MSHCs for arithmetic verification and word-problems overlap by 40-60 \%, revealing a reusable numerical sub-network, whereas grammar circuits are largely disjoint. These findings suggest that small LLMs learn a dedicated "number sense" circuit that generalises from bare arithmetic to text-framed problems, while syntactic competence is carried by a separate set of heads. Our results offer new levers for parameter-efficient fine-tuning and mechanistic interpretability of compact language models.
+\end{abstract}
 
 \section{Introduction}
-Large language models (LLMs) have transformed natural language processing, demonstrating unprecedented capabilities across a spectrum of linguistic tasks—from simple question answering to complex reasoning, creative writing, and code generation \citep{brown2020language, chowdhery2022palm, touvron2023llama2, jiang2023mistral}. These models, trained through self-supervised learning on vast corpora of text data, have increasingly approached human-like performance in generating coherent, contextually appropriate, and grammatically well-formed text, despite having no explicit grammatical rules programmed into their architecture. This emergent grammatical competence—arising purely from statistical patterns in training data—represents a fascinating case study in how linguistic knowledge can be acquired implicitly through exposure rather than explicit instruction.
 
-The field has witnessed exponential growth in model size, from early transformer models with hundreds of millions of parameters \citep{vaswani2017attention} to modern giants like GPT-4 \citep{openai2023gpt4} that likely contain trillions of parameters. While these massive models have captured headlines with their impressive capabilities, a parallel revolution has been unfolding in the development of smaller, more efficient models in the 1-8 billion parameter range. Models like Llama 2 \citep{touvron2023llama2}, Gemma 7B \citep{jiang2023mistral}, and Qwen \citep{bai2023qwen} have demonstrated remarkable performance despite their relatively modest size, making them particularly valuable for practical applications where computational efficiency and deployment costs are significant concerns.
+Large language models (LLMs) have transformed natural language processing and mathematical reasoning, demonstrating unprecedented capabilities across a spectrum of tasks—from simple question answering to complex linguistic analysis, arithmetic problem solving, and formal reasoning \citep{brown2020language, chowdhery2022palm, touvron2023llama2, jiang2023mistral}. These models, trained through self-supervised learning on vast corpora of text and mathematical data, have increasingly approached human-like performance in generating both grammatically well-formed text and mathematically coherent solutions, despite having no explicit grammatical rules or arithmetic algorithms programmed into their architecture. This emergent dual competence—arising purely from statistical patterns in training data—represents a fascinating case study in how both linguistic and mathematical knowledge can be acquired implicitly through exposure rather than explicit instruction.
 
-These smaller LLMs offer a compelling balance between capability and efficiency, enabling deployment on consumer hardware, edge devices, and resource-constrained environments. Their reduced inference costs make them attractive for commercial applications, while their smaller memory footprint allows for fine-tuning and adaptation with more modest computational resources. Understanding how these models encode and represent grammatical knowledge is therefore not merely an academic exercise but has significant practical implications for developing more capable, efficient, and linguistically robust language technologies.
+In this work we move beyond aggregate performance metrics and zoom in on the level of individual attention heads. Inspired by circuit-based interpretability analyses \citep{olah2020zoom, elhage2021superposition}, we introduce the \emph{Minimum Sufficient Head Circuit} (MSHC)—the smallest set of heads whose activations suffice to solve a task within a user‑specified tolerance. Extracting MSHCs for arithmetic verification, mathematical word‑problems, and grammatical acceptability across three open‑weight models (Gemma‑9B, Llama‑8B, Qwen‑8B), we uncover a substantial overlap between the arithmetic and word‑problem circuits and only minimal intersection with the grammar circuit. These results indicate that small LLMs reuse a shared numerical sub‑circuit across superficially different tasks while maintaining a distinct pathway for syntactic reasoning. We quantify this overlap, analyse how it scales with model size, and discuss implications for parameter‑efficient fine‑tuning and model editing.
+
+The field has witnessed exponential growth in model size, from early transformer models with hundreds of millions of parameters \citep{vaswani2017attention} to modern giants like GPT-4 \citep{openai2023gpt4} that likely contain trillions of parameters. While these massive models have captured headlines with their impressive capabilities in both language and mathematics, a parallel revolution has been unfolding in the development of smaller, more efficient models in the 1-8 billion parameter range. Models like Llama 2 \citep{touvron2023llama2}, Gemma 7B \citep{jiang2023mistral}, and Qwen \citep{bai2023qwen} have demonstrated remarkable performance in both linguistic and numerical tasks despite their relatively modest size, making them particularly valuable for practical applications where computational efficiency and deployment costs are significant concerns.
+
+These smaller LLMs offer a compelling balance between capability and efficiency, enabling deployment on consumer hardware, edge devices, and resource-constrained environments. Their reduced inference costs make them attractive for commercial applications, while their smaller memory footprint allows for fine-tuning and adaptation with more modest computational resources. Understanding how these models encode and represent both grammatical and numerical knowledge is therefore not merely an academic exercise but has significant practical implications for developing more capable, efficient, and cognitively robust language technologies that can handle both linguistic and mathematical reasoning.
 
 \section{Related Work and Background}
 
-\subsection{Grammatical Evaluation of Language Models}
-Research on grammatical capabilities in neural language models has evolved from early work on LSTM-based models \citep{linzen2016assessing} to transformer-based architectures \citep{goldberg2019assessing, devlin2019bert}. Evaluation frameworks have progressed from simple subject-verb agreement tests to comprehensive benchmarks like CoLA \citep{warstadt2019neural} and BLiMP \citep{warstadt2020blimp}. The BLiMP benchmark, comprising 67 minimal pair tests across 12 linguistic phenomena, has been particularly valuable for assessing grammatical competence. Recent studies have extended evaluation to larger models, revealing that while performance scales with size, challenges remain with complex hierarchical structures and garden-path sentences \citep{thrush2022winograd, qian2022limitations}.
+\subsection{Linguistic and Mathematical Evaluation of Language Models}
+Research on evaluating neural language models has evolved from early work on LSTM-based architectures \citep{linzen2016assessing} to comprehensive assessment of transformer-based models across both linguistic and mathematical domains \citep{goldberg2019assessing, devlin2019bert, saxton2019analysing}. For grammatical evaluation, frameworks have progressed from simple agreement tests to comprehensive benchmarks like CoLA \citep{warstadt2019neural} and BLiMP \citep{warstadt2020blimp}. For mathematical reasoning, benchmarks include GSM8K \citep{cobbe2021training}, SVAMP \citep{patel2021nlpforml}, and MathQA \citep{amini2019mathqa}, which test arithmetic computation, word problem understanding, and quantitative reasoning. Recent studies have revealed that while performance in both domains scales with size, challenges remain with complex hierarchical structures in grammar and multi-step reasoning in mathematics \citep{thrush2022winograd, qian2022limitations, lewkowycz2022solving}.
 
-\subsection{Scale and Grammatical Competence}
-The relationship between model scale and grammatical abilities follows complex patterns beyond the general power-law scaling observed in language modeling \citep{kaplan2020scaling}. Research suggests that rare grammatical constructions require disproportionately more training data \citep{wei2021frequency}, and certain phenomena show nonlinear improvements at specific parameter thresholds \citep{zhang2023language}. Studies on compositional generalization indicate that scaling alone may not capture human-like grammatical productivity without architectural innovations \citep{hu2020systematic}. Beyond raw parameter count, specific architectural components significantly impact grammatical knowledge acquisition, with attention mechanisms crucial for long-distance dependencies and feed-forward networks encoding categorical information \citep{patel2022mapping}.
+\subsection{Scale and Cognitive Competence}
+The relationship between model scale and cognitive abilities follows complex patterns beyond the general power-law scaling observed in language modeling \citep{kaplan2020scaling}. Research suggests that rare grammatical constructions and complex arithmetic operations require disproportionately more training data \citep{wei2021frequency, patel2021nlpforml}. Certain phenomena in both domains show nonlinear improvements at specific parameter thresholds \citep{zhang2023language}, with mathematical reasoning often exhibiting steeper scaling curves than linguistic tasks \citep{rae2021scaling}. Studies on compositional generalization indicate that scaling alone may not capture human-like cognitive productivity without architectural innovations that support both symbolic and statistical processing \citep{hu2020systematic, lake2022human}.
 
-\subsection{Probing Language Models for Linguistic Knowledge}
-Researchers have developed various probing techniques to understand how linguistic knowledge is represented within model parameters. Structural probes have revealed that models implicitly encode hierarchical syntactic structures \citep{hewitt2019structural}, with syntactic information appearing in earlier layers and semantic information in later ones \citep{tenney2019bert}. Transformer-based models exhibit emergent symbolic manipulation capabilities resembling discrete linguistic rules \citep{manning2020emergent}, with individual neurons specializing in specific linguistic features \citep{geva2021transformer}. Attention patterns often correspond to syntactic dependencies \citep{levy2018emergence}, with different attention heads specializing in distinct linguistic phenomena \citep{clark2019does}.
+\subsection{Probing Language Models for Cognitive Knowledge}
+Researchers have developed various probing techniques to understand how linguistic and mathematical knowledge is represented within model parameters. Structural probes have revealed that models implicitly encode both syntactic hierarchies and numerical relationships \citep{hewitt2019structural, wallace2019nlp}, with different types of knowledge appearing at different network depths \citep{tenney2019bert, kim2020interpreting}. Studies show that transformer-based models exhibit emergent capabilities resembling both discrete linguistic rules and arithmetic algorithms \citep{manning2020emergent, power2022moresymbolic}, with individual neurons specializing in specific linguistic features or numerical operations \citep{geva2021transformer, patel2022mapping}. Attention patterns often correspond to both syntactic dependencies and mathematical relations, with different attention heads specializing in distinct cognitive phenomena \citep{clark2019does, kim2020analyzing}.
 
 \subsection{Small LLMs and Comparative Studies}
-The proliferation of open-weight models like OPT \citep{zhang2022opt}, Llama \citep{touvron2023llama}, Gemma \citep{jiang2023mistral}, and Qwen \citep{bai2023qwen} has enabled more systematic analyses of how capabilities scale and how architectural choices affect performance. Studies show that smaller models with innovative architectures can outperform larger ones \citep{jiang2023mistral}, and data quality may be as important as scale for robust grammatical representations \citep{bai2023qwen}. Comparative analyses across architectures remain limited but suggest significant variations in performance even at similar parameter scales \citep{talmor2020olmpics, zhao2023survey}. Recent frameworks for quantifying evaluation uncertainties \citep{roberts2023quantifying} and structured evaluation approaches \citep{xia2023structured} have revealed that architectural design choices impact specific grammatical phenomena differently, suggesting that model architectures encode grammatical knowledge in fundamentally different ways.
+The proliferation of open-weight models like OPT \citep{zhang2022opt}, Llama \citep{touvron2023llama}, Gemma \citep{team2024gemma}, and Qwen \citep{bai2023qwen} has enabled more systematic analyses of how capabilities in both linguistic and mathematical domains scale and how architectural choices affect performance. Studies show that smaller models with innovative architectures can outperform larger ones in specific aspects of language and mathematics \citep{mckenzie2023inverse}, and data quality may be as important as scale for robust cognitive representations \citep{hoffmann2022empirical}. Comparative analyses across architectures remain limited but suggest significant variations in performance even at similar parameter scales, with some models showing domain-specific strengths \citep{talmor2020olmpics, zhao2023survey}. Recent frameworks for quantifying evaluation uncertainties \citep{roberts2023quantifying} and structured evaluation approaches \citep{xia2023structured} have revealed that architectural design choices impact both grammatical and mathematical phenomena differently, suggesting that model architectures encode cognitive knowledge in fundamentally different ways.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Methodology}
-\subsection{Evaluating Grammatical Knowledge Across Linguistic Categories}
+\label{sec:methods}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-Our evaluation framework divides grammatical phenomena into five key linguistic categories: island effects, quantifiers, ellipsis, argument structure, and binding constraints. This categorization allows us to assess whether grammatical knowledge is acquired uniformly or if certain phenomena are represented differently across model architectures and scales.
+Our analysis proceeds in three strands:
 
-To visualize how these grammatical categories are embedded within model representations, we applied t-SNE 
-dimensionality reduction to final-layer activations from ungrammatical sentences. 
-Figure~\ref{fig:tsne} shows these representations for three 1B-scale models. The visualizations
- reveal distinct organizational patterns, with varying degrees of cluster separation suggesting that 
- models encode grammatical phenomena differently. Llama 1B forms more distinct category clusters, while 
- Qwen 1.5B shows more integrated representations across categories. 
-\begin{figure}[t]
-  \hspace*{-1cm}
-  \includegraphics[width=1.1\textwidth]{figures/grammar_tsne}
-  \caption{T-SNE visualizations of grammatical representations across three 1B-scale language models. Points represent ungrammatical sentences colored by linguistic category. Contours indicate density of representations, revealing how different architectures organize grammatical knowledge.}
-  \label{fig:tsne}
-\end{figure}
-
-\subsection{Experimental Protocol for Grammatical Assessment}
-
-We evaluate grammatical knowledge in LLMs through a systematically designed protocol that captures both explicit and implicit grammatical understanding. Our methodology encompasses two complementary evaluation paradigms:
-
-\begin{itemize}
-  \item \textbf{Binary Classification}: Models evaluate the grammaticality of individual sentences through explicit prompted judgment. This tests the model's ability to directly assess syntactic well-formedness.
-  
-  \item \textbf{Minimal Pair Discrimination}: Models select between grammatical and ungrammatical alternatives that differ minimally in structure. This approach aligns with psycholinguistic methodologies for investigating human grammatical intuitions.
+\begin{itemize}[leftmargin=1.3em,itemsep=0.35\baselineskip]
+  \item[\textbf{(1)}]   \textbf{Low-dimensional linear separability (LS).}\;
+                       We measure how well a \emph{D-dimensional} projection
+                       of the hidden state at each layer separates correct from
+                       incorrect examples (D $\leq$ 3).
+  \item[\textbf{(2)}]   \textbf{Minimum Sufficient Head Circuit (MSHC).}\;
+                       Guided by the LS curves we isolate the smallest set of
+                       attention heads whose activations suffice for the task.
+  \item[\textbf{(3)}]   \textbf{Controlled datasets.}\;
+                       All tasks are cast as \emph{minimal pairs} so that a
+                       single factual change flips the label, letting us
+                       attribute separability (or its absence) to that fact
+                       alone.
 \end{itemize}
 
-The prompt templates for each evaluation paradigm are formalized as:
+\vspace{-0.25\baselineskip}
 
-\begin{align}
-  \mathcal{P}_{\text{binary}} &= \text{``Is this sentence grammatically correct/incorrect?: } [S]\text{''} \\
-  \mathcal{P}_{\text{pair}} &= \text{``Which sentence is grammatically better? (A) } [S_1] \text{ (B) } [S_2]\text{''}
-\end{align}
+Throughout, let $\mathcal{V}$ denote the vocabulary and  
+$m:\mathcal{V}^*\!\to\!\mathbb{R}^d$ a causal transformer with $L$ layers and
+$H$ heads per layer.  For a sequence
+$x=(x_1,\dots,x_n)$ we write $\mathbf h_{x,\ell}\in\mathbb{R}^{d}$ for the activation at
+the end‑of‑sequence (EOS) token at layer $\ell$, and
+$\mathbf a_{x,\ell,h}\in\mathbb{R}^{d}$ for the contribution of
+head $h\in\{1,\dots,H\}$ in that layer.
 
-Our analysis extends beyond surface-level responses to probe the internal representations formed during grammatical processing. For each sentence evaluation, we extract activation vectors from all $n$ transformer layers, enabling a fine-grained examination of how grammatical knowledge emerges and propagates through the network hierarchy:
+\paragraph{Activation collection.}
+For every item we construct the full prompt by concatenating a single
+one‑shot demonstration, the query sentence or equation, and the
+end‑of‑sequence marker \texttt{\textless{}/s\textgreater{}} (or its
+model‑specific analogue).  The model is executed in teacher‑forcing
+mode.  At each layer $\ell\in\{0,\dots,L\}$ we record the hidden state
+$\mathbf h_{x,\ell}$ at the position of that final EOS token—thus
+collecting a compact $L{+}1$‑vector trace that summarises the entire
+computation leading to the model’s output logit.  We omit intermediate
+attention projections and all key/value tensors to minimise I/O
+overhead; subsequent probes operate solely on this last‑token trace.
+Because all prompts fit within the context window, no padding is
+required, and teacher forcing guarantees determinism across repeated
+runs.
 
-\begin{align}
-  \mathbf{A}_s &= \{\mathbf{a}_{s,l_1}, \mathbf{a}_{s,l_2}, \ldots, \mathbf{a}_{s,l_n}\}
-\end{align}
+% --- DATASETS ---
+\subsection{Task families and evaluation sets}
+\label{subsec:tasks}
 
-where $\mathbf{A}_s$ represents the complete set of layer-wise activations for sentence $s$. These activation patterns serve as a neural signature of the model's grammatical processing.
+We consider three evaluation corpora, each built from \emph{minimal pairs}
+$(x_c,x_i)$ in which the two members differ in exactly one fact that determines
+correctness.  Every item appears in three prompt variants: the raw text, a
+two‑choice question (“A” or “B”), and a single‑candidate acceptability probe,
+each preceded by a one‑shot demonstration so that prompting remains uniform
+across models.
 
-To quantify and compare grammatical sensitivity across different architectural layers, we compute the Euclidean distance between activation patterns elicited by grammatical ($g$) and ungrammatical ($u$) sentence pairs:
+% --- Beautified dataset examples ---
+\paragraph{Grammar \,(G).}
+The 67k sentence pairs from BLiMP \citep{warstadt2020blimp} cover twelve
+syntactic phenomena.  
+\begin{examplebox}\footnotesize
+\textbf{Good Sentence:} \textit{Who should Derek hug after shocking Richard?}\\[2pt]
+\textbf{Bad Sentence:} \textit{Who should Derek hug Richard after shocking?}
+\end{examplebox}
 
-\begin{align}
-  \text{GramDist}(l_i) &= \frac{1}{|P|}\sum_{(g,u) \in P} \|\mathbf{a}_{g,l_i} - \mathbf{a}_{u,l_i}\|_2
-\end{align}
+\paragraph{Arithmetic verification \,(A).}
+We generate $10^3$ addition pairs with addends
+$n_1,n_2\in[1,10^3]$; incorrect results satisfy the deviation constraint in
+Eq.\,\eqref{eq:arith-constraint}.
+\begin{examplebox}\footnotesize
+\textbf{Good Equation:} 1338+ 88 = 1426\\[2pt]
+\textbf{Bad Equation:} 1338 + 88 = 2139
+\end{examplebox}
 
-where $P$ denotes the set of all grammatical/ungrammatical sentence pairs in our evaluation corpus. This metric captures the degree to which each layer's representations distinguish between well-formed and ill-formed syntactic structures.
+\begin{equation}
+    \label{eq:arith-constraint}
+    .5 * (n1 \pm n2) \leq \text{noisy} (n1 \pm n2) \leq 1.5 * (n1 \pm n2)
+\end{equation}
 
-Figure~\ref{fig:layer_sensitivity} illustrates the layer-wise grammatical sensitivity across different model families, revealing architectural variations in grammatical knowledge acquisition.
+\paragraph{Word-problem arithmetic \,(W).}
+The 100 story problems are produced by numerically perturbing the ending of a
+template narrative:
+\begin{examplebox}\footnotesize
+\textbf{Good Expression:} Tim has 5 apples and eats 2, leaving him with 3 apples.\\[2pt]
+\textbf{Bad Expression:} Tim has 5 apples and eats 2, leaving him with 10 apples.
+\end{examplebox}
+where the perturbation is applied by taking a sentence generated with a template and replacing the numbers with perturbed numbers from 
+the 10000-item dataset of addition/subtraction pairs generated as in~(\ref{eq:arith-constraint}).
+% --- PCA‑SVM ---
 
-% \begin{figure}[h]
-%     \centering
-%     \includegraphics[width=0.95\textwidth]{figures/layer_sensitivity}
-%     \caption{Layer-wise grammatical sensitivity across Llama, Gemma, and Qwen model families. Higher values indicate stronger differentiation between grammatical and ungrammatical sentences. Gemma models demonstrate earlier grammatical differentiation in middle layers, while Llama models show more pronounced differentiation in later layers.}
-%     \label{fig:layer_sensitivity}
-% \end{figure}
+%------------------------------------------------------------------------
+\subsection{Low‑dimensional linear separability metric}
+\label{subsec:lsmetric}
+%------------------------------------------------------------------------
 
+A well‑known pathology of very high–dimensional spaces is that almost
+\emph{any} two finite clouds are linearly separable with overwhelming
+probability \citep[see][]{cover1965geometrical}.  
+Raw accuracy of a linear probe in the full residual space
+$\mathbb R^{d}$ therefore over‑states how “easy’’ a task is.  
+To obtain a more conservative—and hence more informative—measure of
+representational structure, we evaluate separability after first
+collapsing the hidden states onto just \emph{two} principal directions.
+We call the resulting statistic the
+\emph{low‑dimensional linear separability} score,
+$\operatorname{LS}_{t,\ell}$.
+
+\vspace{0.5\baselineskip}
+\noindent
+\textbf{Notation.}\;
+Fix a task $t$ and a transformer layer $\ell$.
+For every prompt $x$ we write
+$
+  \mathbf h_{x,\ell}\!\in\!\mathbb R^{d}
+$
+for the centred hidden state at the EOS position:
+$\mathbf h_{x,\ell}\;:=\;\mathbf h_{x,\ell}^{(n)}-\bar{\mathbf h}_{\ell}$,
+where
+$
+  \bar{\mathbf h}_{\ell}
+  =\tfrac1{|\mathcal D_t|}\sum_{x\in\mathcal D_t}\mathbf h_{x,\ell}^{(n)}
+$
+is the layer mean computed over the complete training split
+$\mathcal D_t$.
+
+\paragraph{Step A: variance‑maximising projection.}
+Let
+$
+  \Sigma_\ell
+  =\tfrac1{|\mathcal D_t|}
+   \sum_{x\in\mathcal D_t}\mathbf h_{x,\ell}\mathbf h_{x,\ell}^{\!\top}
+$
+be the empirical covariance matrix.
+We seek an orthonormal matrix
+$\mathbf W_\ell\!\in\!\mathbb R^{d\times 2}$ that captures the greatest
+possible variance under a rank‑2 constraint:
+\begin{equation}
+\label{eq:pca}
+\max_{\mathbf W^\top \!\mathbf W=\mathbf I_2}\;
+\operatorname{Tr}\!\bigl(\mathbf W^\top\Sigma_\ell\mathbf W\bigr).
+\end{equation}
+The optimal columns are the two leading eigenvectors of $\Sigma_\ell$.
+The corresponding 2‑D coordinates are
+$
+  \tilde{\mathbf h}_{x,\ell}
+  \;=\;
+  \mathbf W_\ell^\top\mathbf h_{x,\ell}
+  \in\mathbb R^{2}.
+$
+
+\paragraph{Step B: linear decision boundary.}
+Assign labels
+$y_i\!=\!+1$ for \emph{correct} members of a minimal pair and
+$y_i\!=\!-1$ for \emph{incorrect} ones.
+We train a soft‑margin support‑vector machine in the projected space:
+\begin{equation}
+\label{eq:svm}
+\min_{\mathbf w,b}\;
+\tfrac12\|\mathbf w\|_2^2
++\;C\sum_{i=1}^{N_t}
+\max\!\bigl(0,\,1-y_i(\mathbf w^\top\tilde{\mathbf h}_{x_i,\ell}+b)\bigr),
+\qquad
+C=10.
+\end{equation}
+Because $\tilde{\mathbf h}_{x,\ell}\!\in\!\mathbb R^2$, the resulting
+classifier depends on at most three parameters, precluding the kind of
+pathological over‑fitting that haunts full‑dimensional probes.
+
+\paragraph{Definition of the metric.}
+Let
+$
+  \hat y_i
+  =\operatorname{sign}\!\bigl(\mathbf w^\top\tilde{\mathbf h}_{x_i,\ell}+b\bigr)
+$
+denote the SVM’s prediction on a held‑out validation example.
+We define
+\begin{equation}
+\label{eq:ls-score}
+\operatorname{LS}_{t,\ell}
+=\frac{1}{N_t^{\text{val}}}
+ \sum_{i=1}^{N_t^{\text{val}}}\mathbf 1[\hat y_i=y_i],
+\qquad
+\operatorname{LS}_{t,\ell}\in[0,1].
+\end{equation}
+
+\paragraph{Interpretation.}
+Random guessing gives $\operatorname{LS}_{t,\ell}=0.5$.
+A score close to 1 implies that the first two principal axes already
+support a linear decision boundary, i.e.\ the class‑conditional embeddings
+differ in a \emph{low‑codimension} direction.
+Conversely, scores near 0.5 indicate either geometric entanglement or
+dispersion of the signal across many dimensions.
+
+\vspace{0.3\baselineskip}
+In what follows we plot $\ell\mapsto\operatorname{LS}_{t,\ell}$ for each
+task. Peaks in these curves spotlight layers where the model’s hidden
+states make the good/bad distinction in the simplest possible way: by
+shifting along just two orthogonal directions.
+
+% ---------- NEW MSHC SUBSECTION ----------
+\subsection{The Minimum Sufficient Head Circuit}
+\label{subsec:mshc}
+
+A transformer’s computation is frequently dominated by a surprisingly
+small subset of its attention heads.  We formalise this with the
+\emph{Minimum Sufficient Head Circuit} (MSHC).  Fix an accuracy tolerance
+$\epsilon\in(0,0.5)$.  Let
+$\mathcal H=\{(\ell,h):1\le\ell\le L,\;1\le h\le H\}$ be the set of all
+heads.  A subset $\mathcal C\subseteq\mathcal H$ is an
+\textbf{MSHC}${}_{\!\epsilon}$ if, \emph{with high probability (WHP)}, enabling any single head from $\mathcal C$ is already sufficient to lift accuracy above chance:
+\[
+  (\forall h\in\mathcal C)\quad
+  \Pr_{x\sim\mathcal D}\!\bigl[\mathrm{Acc}\bigl(m;\{h\}\bigr) > 0.5+\epsilon\bigr] \;\ge\; 1-\delta,
+\]
+where $\delta$ is a user‑specified failure probability (we use $\delta=0.05$ in all experiments), and $\mathcal C$ is inclusion‑minimal with this property.
+
+
+%
+\noindent\textbf{Hunting the circuit}
+Our search still employs a sliding window but now ranks layers by the \emph{size} of the accuracy loss they incur.  
+We slide a window of width $w=\lfloor xL\rfloor$ layers from the bottom to the top of the network, disable \emph{all} heads in that window, and measure the resulting accuracy $\mathrm{Acc}_{\mathrm{off}}$.  
+For every layer $\ell$ covered by the current window we store  
+$\textsc{AccLayer}[\ell]=\max\!\bigl(\textsc{AccLayer}[\ell],\mathrm{Acc}_{\mathrm{off}}\bigr)$—the \emph{best} accuracy ever observed when \emph{any} window that contains $\ell$ is switched off.  
+After scanning all windows we compute a per‑layer drop score  
+$\Delta_\ell=\mathrm{Acc}_{\mathrm{full}}-\textsc{AccLayer}[\ell]$  
+and keep those layers whose $\Delta_\ell$ lies in the top 25th percentile.  
+These high‑impact layers seed the head‑level search:
+
+% --- begin patch: enumerate steps for MSHC ---
+\begin{enumerate}[label=\textbf{Step \arabic*.}, leftmargin=4em, itemsep=0pt]
+\item Disable every head \emph{in the selected top‑quartile layers}, establishing a ``dark‑start'' baseline.
+\item Run a stochastic pruning loop (Alg.\,\ref{alg:mshc}) that begins with bundle size $k_0=\lceil 2\sqrt{|\mathcal C|}\rceil$. For each bundle size $k$, we draw $N$ random bundles of $k$ heads, measure their accuracies, and remove the bundle that attains the \emph{lowest} accuracy whenever that value is $\le 0.5+\epsilon$. When the worst of the $N$ bundles exceeds the threshold, we tighten the constraint by updating $k\leftarrow\max(1,\lfloor k/2\rfloor)$ and continue.
+\item Stop when $k=1$ and every random bundle succeeds—by definition, the remaining heads form an MSHC.
+\end{enumerate}
+% --- end patch: enumerate steps for MSHC ---
+The procedure terminates because the candidate set shrinks
+monotonically and can be pruned at most $|\mathcal H|$ times.
+
+The narrative interpretation is simple: we first find \emph{where} knowledge
+lives, then keep only those filaments that reliably relight the lamp.
+\begin{algorithm}[t]
+\setstretch{1.15}
+\caption{Sliding‑window percentile localisation followed by stochastic discovery of an MSHC${}_{\epsilon}$}
+\label{alg:mshc}
+\begin{algorithmic}[1]
+\Require Window fraction $x$, tolerance $\epsilon$, sample count $N$
+\State $\mathrm{Acc}_{\mathrm{full}}\gets\mathrm{Acc}(m)$
+\State $w\gets\lfloor xL\rfloor$
+\State initialise array $\textsc{AccLayer}[1\!:\!L]\gets 0$ \Comment{best accuracy seen with each layer disabled}
+\For{$s = 1$ \textbf{to} $L-w+1$}
+    \State disable all heads in layers $s$ to $s+w-1$
+    \State $\mathrm{Acc}_{\mathrm{off}}\gets\mathrm{Acc}(m)$
+    \For{$\ell = s$ \textbf{to} $s+w-1$}
+        \State $\textsc{AccLayer}[\ell]\gets\max\!\bigl(\textsc{AccLayer}[\ell],\,\mathrm{Acc}_{\mathrm{off}}\bigr)$
+    \EndFor
+    \State re‑enable the disabled layers
+\EndFor
+\State \Comment{compute per‑layer drop scores}
+\For{$\ell = 1$ \textbf{to} $L$}
+    \State $\textsc{Drop}[\ell]\gets\mathrm{Acc}_{\mathrm{full}} - \textsc{AccLayer}[\ell]$
+\EndFor
+\State $\tau\gets\text{75th percentile of }\textsc{Drop}$
+\State $\mathcal{L}\gets\{\ell\;|\;\textsc{Drop}[\ell]\ge\tau\}$ \Comment{top‑quartile layers}
+\State $\mathcal{C}\gets$ all heads in $\mathcal{L}$ \Comment{initial candidate circuit}
+\State $k\gets\left\lceil 2\sqrt{|\mathcal C|}\right\rceil$
+\While{$k \ge 1$}
+    \Repeat
+        \State $\text{minAcc}\gets 1$; $\mathcal K_{\mathrm{min}}\gets\emptyset$
+        \For{$i = 1$ \textbf{to} $N$}
+            \State draw $\mathcal K\!\sim\!\mathrm{Unif}\{\mathcal S\subseteq\mathcal C:|\mathcal S|=k\}$
+            \State $\text{acc}\gets\mathrm{Acc}(m;\mathcal K)$
+            \If{$\text{acc} < \text{minAcc}$}
+                \State $\text{minAcc}\gets\text{acc}$; $\mathcal K_{\mathrm{min}}\gets\mathcal K$
+            \EndIf
+        \EndFor
+        \If{$\text{minAcc}\le 0.5+\epsilon$}
+            \State $\mathcal C\gets\mathcal C\setminus\mathcal K_{\mathrm{min}}$ \Comment{prune the worst bundle}
+        \EndIf
+    \Until{$\text{minAcc}>0.5+\epsilon$}
+    \State $k\gets\max(1,\lfloor k/2\rfloor)$
+\EndWhile
+\State\Return $\mathcal C$
+\end{algorithmic}
+\end{algorithm}
+
+Empirically, the circuit coalesces in fewer than 300 iterations on all three
+models studied—Gemma-9B, Llama-8B, and Qwen-8B.
+
+% ---------- NEW PROTOCOL PARAGRAPH ----------
+\subsection{Experimental protocol}
+\label{subsec:protocol}
+
+Our analysis focuses on three open-weight checkpoints that occupy a comparable
+size class yet differ architecturally: \emph{Gemma-9B}, \emph{Llama-8B} and
+\emph{Qwen-8B}.  Each model is evaluated on exactly the same train/validation/
+test splits (60 : 20 : 20) of the G, A, and W corpora described above.  For a
+given model we first trace the accuracy‑vs‑layer curves
+(§\ref{subsec:pca_svm}), then feed the validation set to the sliding-window
+search with $(\epsilon,k)=(0.1,3)$ and a window fraction $x\!=\!0.2$.  The
+resulting MSHC is frozen before we inspect test performance, and uncertainty
+bands are computed via 1 000-sample bootstrap over minimal pairs.  All
+experiments run on a single A100 80 GB GPU; wall-clock times are listed in
+Appendix C.
 \section{Experiments}
 
 \section{Discussion}

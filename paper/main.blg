@@ -3,44 +3,62 @@ Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
 The top-level auxiliary file: main.aux
 The style file: plainnat.bst
 Database file #1: references.bib
-You've used 31 entries,
+Warning--I didn't find a database entry for "olah2020zoom"
+Warning--I didn't find a database entry for "elhage2021superposition"
+Warning--I didn't find a database entry for "saxton2019analysing"
+Warning--I didn't find a database entry for "cobbe2021training"
+Warning--I didn't find a database entry for "patel2021nlpforml"
+Warning--I didn't find a database entry for "amini2019mathqa"
+Warning--I didn't find a database entry for "lewkowycz2022solving"
+Warning--I didn't find a database entry for "rae2021scaling"
+Warning--I didn't find a database entry for "lake2022human"
+Warning--I didn't find a database entry for "wallace2019nlp"
+Warning--I didn't find a database entry for "kim2020interpreting"
+Warning--I didn't find a database entry for "power2022moresymbolic"
+Warning--I didn't find a database entry for "kim2020analyzing"
+Warning--I didn't find a database entry for "team2024gemma"
+Warning--I didn't find a database entry for "mckenzie2023inverse"
+Warning--I didn't find a database entry for "hoffmann2022empirical"
+Warning--I didn't find a database entry for "cover1965geometrical"
+You've used 30 entries,
             2773 wiz_defined-function locations,
-            739 strings with 12114 characters,
-and the built_in function-call counts, 20594 in all, are:
-= -- 1653
-> -- 1933
+            751 strings with 12178 characters,
+and the built_in function-call counts, 20131 in all, are:
+= -- 1616
+> -- 1894
 < -- 14
-+ -- 650
-- -- 618
-* -- 1859
-:= -- 3297
-add.period$ -- 95
-call.type$ -- 31
-change.case$ -- 289
-chr.to.int$ -- 30
-cite$ -- 62
-duplicate$ -- 723
-empty$ -- 1196
-format.name$ -- 655
-if$ -- 4177
++ -- 637
+- -- 606
+* -- 1819
+:= -- 3221
+add.period$ -- 92
+call.type$ -- 30
+change.case$ -- 282
+chr.to.int$ -- 29
+cite$ -- 60
+duplicate$ -- 703
+empty$ -- 1165
+format.name$ -- 642
+if$ -- 4084
 int.to.chr$ -- 2
 int.to.str$ -- 1
-missing$ -- 31
-newline$ -- 163
-num.names$ -- 124
-pop$ -- 591
+missing$ -- 30
+newline$ -- 158
+num.names$ -- 120
+pop$ -- 577
 preamble$ -- 1
-purify$ -- 258
+purify$ -- 252
 quote$ -- 0
-skip$ -- 684
+skip$ -- 668
 stack$ -- 0
-substring$ -- 473
-swap$ -- 114
+substring$ -- 471
+swap$ -- 113
 text.length$ -- 9
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 341
+type$ -- 330
 warning$ -- 0
-while$ -- 124
+while$ -- 121
 width$ -- 0
-write$ -- 396
+write$ -- 384
+(There were 17 warnings)

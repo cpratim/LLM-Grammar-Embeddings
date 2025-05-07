@@ -16,7 +16,7 @@ if __name__ == "__main__" or True:
     with open("activated.json", "w") as f:
         json.dump([(0, 0)], f)
 
-    device = torch.device("cuda:7" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:5" if torch.cuda.is_available() else "cpu")
     get_device_memory_report(device)
     model_name = "google/gemma-2-9b-it"
     model, tokenizer = load_altered_attention_model(model_name, device, model_type="gemma")
