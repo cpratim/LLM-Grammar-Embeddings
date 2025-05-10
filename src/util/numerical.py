@@ -54,7 +54,7 @@ def fill_in_example(example, a, b, ans):
     return ex
 
 
-def load_word_problems_data(data_path: str = "../../data/word_problems/fill_in_simple.json", numerical_data_path: str = "../../data/arithmetic/addition_subtraction.jsonl", margin: int = 50):
+def load_word_problems_data(data_path: str = "../data/word_problems/template.json", numerical_data_path: str = "../data/arithmetic/addition_subtraction.jsonl", margin: int = 50):
     with open(data_path, "r") as f:
         data = json.load(f)
     with open(numerical_data_path, "r") as f:
@@ -92,9 +92,9 @@ def load_word_problems_data(data_path: str = "../../data/word_problems/fill_in_s
 
     shuffle(dataset)
 
-    with open('../../data/word_problems/fill_in_addition_subtraction_simple.jsonl', 'w') as f:
-        for item in dataset:
-            f.write(json.dumps(item) + '\n')
+    # with open('../../data/word_problems/fill_in_addition_subtraction_simple.jsonl', 'w') as f:
+    #     for item in dataset:
+    #         f.write(json.dumps(item) + '\n')
 
     return dataset
 

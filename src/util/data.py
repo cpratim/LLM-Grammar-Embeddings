@@ -4,6 +4,7 @@ import os
 import numpy as np
 from tqdm import tqdm
 from random import uniform
+from util.numerical import load_word_problems_data
 
 def load_grammar_data(file_path):
     with open(file_path, "r") as f:
@@ -78,18 +79,21 @@ def load_numerical_data(
     return ret_data
 
 
-def load_word_problems_data(
-    data_path: str = "../data/word_problems/fill_in_addition_subtraction_simple.jsonl",
-    use_tqdm: bool = False,
-):
-    data = []
-    with open(data_path, "r") as f:
-        for line in f:
-            try:
-                data.append(json.loads(line))
-            except:
-                print(line)
-    return data
+# def load_word_problems_data(
+#     data_path: str = "../data/word_problems/fill_in_addition_subtraction_simple.jsonl",
+#     use_tqdm: bool = False,
+# ):
+#     data = []
+#     with open(data_path, "r") as f:
+#         for line in f:
+#             try:
+#                 data.append(json.loads(line))
+#             except:
+#                 print(line)
+#     return data
+
+# def load_word_problems_data():
+#     return load_word_problems_data()
 
 
 def load_hidden_data(model_name, grammar_name, data_path="../data/blimp-hidden"):

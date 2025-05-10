@@ -28,8 +28,7 @@ def metric(
     device,
     metric_type: str,
     problem_type: str,
-    use_system_message: bool = False,
-    D: int = 3,
+    D: int = 10,
 ):
     embeddings = load_embeddings_dataset(
         data,
@@ -39,7 +38,6 @@ def metric(
         types_=[metric_type],
         use_tqdm=True,
         problem_type=problem_type,
-        use_system_message=use_system_message,
     )[metric_type]
     X = np.array([embedding["states"][-1] for embedding in embeddings])
     y = np.array([embedding["answer"] for embedding in embeddings])
@@ -73,29 +71,27 @@ def layer_select(
     device,
     metric_type="raw",
     problem_type="numerical",
-    use_system_message=False,
-    percentages=[1/2, 1/3, 1/4, 1/5, 1/8, 1/10, 1/20],
+    k: int = 5,
+    D: int = 10,
     outfile="outputs/removed_layers_numerical.json",
 ):
     n_layers, n_heads = get_model_dimensions(model, tokenizer, device)
     layer_pool = [l for l in range(n_layers)]
+    
     results = {}
-    for percentage in percentages:
-        results[percentage] = {}
-        k = round(len(layer_pool) * percentage)
-        print('Percentage: ', percentage, 'k: ', k)
-        for i in range(len(layer_pool) - k + 1):
-            layer_subset = layer_pool[i:i+k]
-            disable_layers(model, layer_subset, n_heads)
-            acc = metric(data, model, tokenizer, device, metric_type, problem_type, use_system_message)
-            for l in layer_subset:
-                if l not in results[percentage]:
-                    results[percentage][l] = []
-                results[percentage][l].append(acc)
-            enable_layers(model, layer_subset, n_heads)
+    for i in range(len(layer_pool) - k + 1):
+        layer_subset = layer_pool[i:i+k]
+        disable_layers(model, layer_subset, n_heads)
+        acc = metric(data, model, tokenizer, device, metric_type, problem_type, D=D)
+        for l in layer_subset:
+            if l not in results:
+                results[l] = []
+            results[l].append(acc)
+        enable_layers(model, layer_subset, n_heads)
         
         with open(outfile, "w") as f:
             json.dump(results, f, indent=4)
+    return results
 
 
 def save_head_pool(head_pool, outfile):
@@ -122,37 +118,33 @@ def head_select(
     device, 
     epsilon=.1,
     layer_data=None,
-    percentage=.05,
-    n_splits=5,
+    n_splits=10,
     metric_type="raw",
     problem_type="numerical",
-    use_system_message=False,
+    D: int = 10,
+    percentile: int = 75,
     outfile="outputs/gemma_numerical_head_pool.json",
 ):
     if model is not None:
         n_layers, n_heads = get_model_dimensions(model, tokenizer, device)
     total_heads = n_layers * n_heads
 
-    for p in layer_data:
-        if p.startswith(str(percentage)):
-            break
-
-    layer_impact = [max(layer_data[p][k]) for k in layer_data[p]]
+    layer_impact = [max(layer_data[k]) for k in layer_data]
     least_impact = max(layer_impact)
     impacts = [(least_impact - v) for v in layer_impact]
-    upper_quartile = np.percentile(impacts, 75)
+    upper_quartile = np.percentile(impacts, percentile)
     layer_pool = [i for i, v in enumerate(layer_impact) if (least_impact - v) > upper_quartile]
     head_pool = [(l, h) for l in layer_pool for h in range(n_heads)]
     K = int(2 * np.ceil(np.sqrt(len(head_pool))))
 
-    base_acc = metric(data, model, tokenizer, device, metric_type, problem_type, use_system_message)
+    base_acc = metric(data, model, tokenizer, device, metric_type, problem_type, D=D)
     print('Base Acc: ', base_acc)
 
     for l in layer_pool:
         for h in range(n_heads):
             disable_head(model, l, h)
     
-    starting_acc = metric(data, model, tokenizer, device, metric_type, problem_type, use_system_message)
+    starting_acc = metric(data, model, tokenizer, device, metric_type, problem_type, D=D)
     print('Starting Acc: ', starting_acc)
 
     for l in layer_pool:
@@ -180,7 +172,7 @@ def head_select(
             for l, h in head_batch:
                 enable_head(model, l, h)
             print('Disabled Heads (2): ', get_total_disabled_heads(model))
-            acc = metric(data, model, tokenizer, device, metric_type, problem_type, use_system_message)
+            acc = metric(data, model, tokenizer, device, metric_type, problem_type, D=D)
             if acc < lowest_acc:
                 lowest_acc = acc
                 lowest_acc_head_batch = head_batch
@@ -191,7 +183,7 @@ def head_select(
             for h in range(n_heads):
                 enable_head(model, l, h)
 
-        if lowest_acc > starting_acc + epsilon:
+        if lowest_acc > starting_acc + epsilon * base_acc:
             if K == 1:
                 break
             K = int(np.ceil(K / 2))

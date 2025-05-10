@@ -1,5 +1,6 @@
 from module.blocked_attention import load_altered_attention_model
-from util.data import load_numerical_data, load_grammar_data_by_category, load_word_problems_data
+from util.data import load_numerical_data, load_grammar_data_by_category
+from util.numerical import load_word_problems_data
 import torch
 from random import shuffle
 from module.algo import layer_select, head_select
@@ -7,73 +8,57 @@ import json
 from pprint import pprint
 
 if __name__ == "__main__":
-    numerical_data = load_numerical_data(margin=50)
-    shuffle(numerical_data)
-    numerical_data = numerical_data[:50]
+    
 
-    noun_agreement_data = load_grammar_data_by_category(
-        category="linguistics_term", value="determiner_noun_agreement", sample_rate=1
-    )
-    shuffle(noun_agreement_data)
-    noun_agreement_data = noun_agreement_data[:50]
+    device = torch.device("cuda:5" if torch.cuda.is_available() else "cpu")
 
-    word_problems_data = load_word_problems_data()
-
-    device = torch.device("cuda:6" if torch.cuda.is_available() else "cpu")
+    # Load the model
+    model_name = "qwen/qwen3-8b"
+    model_type = "qwen"
     model, tokenizer = load_altered_attention_model(
-        "google/gemma-2-9b-it", device, model_type="gemma"
-    )
-    with open("outputs/gemma_removed_layers_numerical.json", "r") as f:
-        numerical_layer_data = json.load(f)
-
-    with open("outputs/gemma_removed_layers_word_problems.json", "r") as f:
-        word_problems_layer_data = json.load(f)
-
-    with open("outputs/gemma_removed_layers_noun_agreement.json", "r") as f:
-        noun_agreement_layer_data = json.load(f)
-
-    head_select(
-        word_problems_data,
-        model,
-        tokenizer,
-        device,
-        layer_data=word_problems_layer_data,
-        metric_type="raw",
-        problem_type="word_problems",
-        use_system_message=False,
-        outfile="outputs/gemma_removed_head_pool_word_problems.json",
+        model_name, device, model_type=model_type
     )
 
-    # layer_select(
-    #     numerical_data,
-    #     model,
-    #     tokenizer,
-    #     device,
-    #     metric_type="raw",
-    #     problem_type="numerical",
-    #     use_system_message=False,
-    #     percentages=[1/20],
-    #     outfile="outputs/gemma_removed_layers_numerical.json",
-    # )
-    # layer_select(
-    #     word_problems_data,
-    #     model,
-    #     tokenizer,
-    #     device,
-    #     metric_type="raw",
-    #     problem_type="word_problems",
-    #     use_system_message=False,
-    #     percentages=[1/3, 1/4, 1/5, 1/8, 1/10, 1/20],
-    #     outfile="outputs/llama_removed_layers_word_problems.json",
-    # )
-    # layer_select(
-    #     noun_agreement_data,
-    #     model,
-    #     tokenizer,
-    #     device,
-    #     metric_type="raw",
-    #     problem_type="determiner_noun_agreement",
-    #     use_system_message=False,
-    #     percentages=[1/3, 1/4, 1/5, 1/10, 1/20],
-    #     outfile="outputs/llama_removed_layers_determiner_noun_agreement.json",
-    # )
+    for i in range(10):
+        numerical_data = load_numerical_data(margin=50)
+        shuffle(numerical_data)
+        numerical_data = numerical_data[:50]
+
+        noun_agreement_data = load_grammar_data_by_category(
+            category="linguistics_term", value="determiner_noun_agreement", sample_rate=1
+        )
+        shuffle(noun_agreement_data)
+        noun_agreement_data = noun_agreement_data[:50]
+
+        word_problems_data = load_word_problems_data()
+        shuffle(word_problems_data)
+        word_problems_data = word_problems_data[:50]
+
+        data = {
+            "numerical": numerical_data,
+            "noun_agreement": noun_agreement_data,
+            "word_problems": word_problems_data,
+        }
+
+        for problem_type, data in data.items():
+            layer_data = layer_select(
+                data,
+                model,
+                tokenizer,
+                device,
+                metric_type="raw",
+                problem_type=problem_type,
+                k=5,
+                outfile=f"layers/{model_type}/{problem_type}_{i}.json",
+            )
+
+            head_select(
+                data,
+                model, 
+                tokenizer, 
+                device, 
+                epsilon=.1,
+                layer_data=layer_data,
+                outfile=f"heads/{model_type}/{problem_type}_{i}.json",
+            )
+
