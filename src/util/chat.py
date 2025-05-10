@@ -435,10 +435,16 @@ def load_embeddings_dataset(
                     }
                 )
             if "raw" in types_:
+                if problem_type == 'grammar':
+                    chat = "Pay attention to the grammatical correctness of the following sentence: {}"
+                elif problem_type == 'arithmetic':
+                    chat = "Pay attention to the arithmetic correctness of the following expression: {}"
+                elif problem_type == 'word_problems':
+                    chat = "Pay attention to the numerical correctness of the following statement: {}"
                 embeddings["raw"].append(
                     {
                         "states": get_eos_states(
-                            model, tokenizer, device, example["good"]
+                            model, tokenizer, device, chat.format(example["good"])
                         ),
                         "answer": 1,
                     }
@@ -446,7 +452,7 @@ def load_embeddings_dataset(
                 embeddings["raw"].append(
                     {
                         "states": get_eos_states(
-                            model, tokenizer, device, example["bad"]
+                            model, tokenizer, device, chat.format(example["bad"])
                         ),
                         "answer": 0,
                     }

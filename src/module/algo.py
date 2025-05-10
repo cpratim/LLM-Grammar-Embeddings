@@ -94,14 +94,21 @@ def layer_select(
     return results
 
 
-def save_head_pool(head_pool, outfile):
+def save_head_pool(head_pool, outfile, starting_acc, lowest_acc, i, base_acc):
     head_dict = {}
     for (l, h) in head_pool:
         if l not in head_dict:
             head_dict[l] = []
         head_dict[l].append(h)
+    res_dict = {
+        "base_acc": base_acc,
+        "starting_acc": starting_acc,
+        "lowest_acc": lowest_acc,
+        "i": i,
+        "head_pool": head_dict,
+    }
     with open(outfile, "w") as f:
-        json.dump(head_dict, f, indent=4)
+        json.dump(res_dict, f, indent=4)
 
 def get_total_disabled_heads(model):
     disabled_heads = get_disabled_heads(model)
@@ -133,9 +140,9 @@ def head_select(
     least_impact = max(layer_impact)
     impacts = [(least_impact - v) for v in layer_impact]
     upper_quartile = np.percentile(impacts, percentile)
-    layer_pool = [i for i, v in enumerate(layer_impact) if (least_impact - v) > upper_quartile]
+    layer_pool = [i for i, v in enumerate(layer_impact) if (least_impact - v) >= upper_quartile]
     head_pool = [(l, h) for l in layer_pool for h in range(n_heads)]
-    K = int(2 * np.ceil(np.sqrt(len(head_pool))))
+    K = int(len(head_pool) / 2)
 
     base_acc = metric(data, model, tokenizer, device, metric_type, problem_type, D=D)
     print('Base Acc: ', base_acc)
@@ -176,7 +183,7 @@ def head_select(
             if acc < lowest_acc:
                 lowest_acc = acc
                 lowest_acc_head_batch = head_batch
-
+        
         print('Lowest Acc: ', lowest_acc, '| Head Batch: ', lowest_acc_head_batch)
     
         for l in range(n_layers):
@@ -188,14 +195,20 @@ def head_select(
                 break
             K = int(np.ceil(K / 2))
             print('Reducing K to ', K)
-            continue
 
-        save_head_pool(head_pool, outfile)
+        else:
+            save_head_pool(head_pool, outfile, starting_acc, lowest_acc, i, base_acc)
+            new_head_pool = []
+            for l, h in head_pool:
+                if (l, h) not in lowest_acc_head_batch:
+                    new_head_pool.append((l, h))
 
-        new_head_pool = []
-        for l, h in head_pool:
-            if (l, h) not in lowest_acc_head_batch:
-                new_head_pool.append((l, h))
-        head_pool = new_head_pool
+            head_pool = new_head_pool
+            if K != 1 and K > .9 * len(head_pool):
+                K = int(np.ceil(K / 2))
+                print('Reducing K to ', K)
+                continue
+
+        
         i += 1
 

@@ -363,14 +363,13 @@ lives, then keep only those filaments that reliably relight the lamp.
     \EndFor
     \State re‑enable the disabled layers
 \EndFor
-\State \Comment{compute per‑layer drop scores}
 \For{$\ell = 1$ \textbf{to} $L$}
-    \State $\textsc{Drop}[\ell]\gets\mathrm{Acc}_{\mathrm{full}} - \textsc{AccLayer}[\ell]$
+    \State $\textsc{Drop}[\ell]\gets\mathrm{Acc}_{\mathrm{full}} - \textsc{AccLayer}[\ell]$ \Comment{compute per‑layer drop scores}
 \EndFor
 \State $\tau\gets\text{75th percentile of }\textsc{Drop}$
 \State $\mathcal{L}\gets\{\ell\;|\;\textsc{Drop}[\ell]\ge\tau\}$ \Comment{top‑quartile layers}
 \State $\mathcal{C}\gets$ all heads in $\mathcal{L}$ \Comment{initial candidate circuit}
-\State $k\gets\left\lceil 2\sqrt{|\mathcal C|}\right\rceil$
+\State $k\gets\left\lfloor{|\mathcal C|} / 2 \right\rfloor$
 \While{$k \ge 1$}
     \Repeat
         \State $\text{minAcc}\gets 1$; $\mathcal K_{\mathrm{min}}\gets\emptyset$
@@ -395,6 +394,9 @@ Empirically, the circuit coalesces in fewer than 300 iterations on all three
 models studied—Gemma-9B, Llama-8B, and Qwen-8B.
 
 % ---------- NEW PROTOCOL PARAGRAPH ----------
+\subsection{Theoretical analysis of MSHC}
+We aim to show that the MSHC is a good approximation of the minimum number of heads that are needed to solve the task.
+
 \subsection{Experimental protocol}
 \label{subsec:protocol}
 

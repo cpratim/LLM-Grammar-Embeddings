@@ -31,7 +31,8 @@ class QwenBlockedAttention(Qwen3Attention):
         self.disable_idx.add(head_idx)
 
     def enable_head(self, head_idx: int):
-        self.disable_idx.remove(head_idx)
+        if head_idx in self.disable_idx:
+            self.disable_idx.remove(head_idx)
 
     def get_model_dimensions(self):
         return self.model_dimensions
