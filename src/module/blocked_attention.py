@@ -46,6 +46,7 @@ def load_altered_attention_model(
                 [] if idx not in disable_idx else disable_idx[idx],
             )
         blocked_attn.load_state_dict(layer.self_attn.state_dict())
+        del layer.self_attn
         layer.self_attn = blocked_attn
         clear_cuda_cache()
     model.to(device)

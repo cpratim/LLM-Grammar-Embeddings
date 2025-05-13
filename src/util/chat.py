@@ -16,6 +16,10 @@ filterwarnings("ignore")
 
 np.random.seed(42)
 
+"""
+===== GRAMMAR =====
+"""
+
 __system_message_multiple_choice_grammar = """You are a helpful assistant that will help me figure out which sentence is grammatically correct and native-like.
 You should only output the number of the correct sentence, '1' if the first sentence is correct, '2' if the second sentence is correct.
 
@@ -39,12 +43,16 @@ Is this sentence grammatically correct?
 
 1"""
 
-__question_format_multiple_choice_grammar = """Which sentence is more grammatically correct? 
+__question_format_multiple_choice_grammar = """Which sentence is grammatically correct? 
 1) {sentence_1} 
 2) {sentence_2}"""
 
 __question_format_binary_grammar = """Is this sentence grammatically correct? 
 1) {sentence_1}"""
+
+"""
+===== ARITHMETIC =====
+"""
 
 __system_message_multiple_choice_arithmetic = """You are a helpful assistant that will help me determine which of two arithmetic expressions is correct.
 
@@ -56,10 +64,6 @@ Which of the following arithmetic expressions is correct?
 
 1"""
 
-__question_format_multiple_choice_arithmetic = """Which of the following arithmetic expressions is correct?
-1) {sentence_1}
-2) {sentence_2}"""
-
 __system_message_binary_arithmetic = """You are a helpful assistant that will help me determine if an arithmetic expression is correct.
 
 ONLY OUTPUT '1' OR '0', NOTHING ELSE.
@@ -69,8 +73,16 @@ Is this arithmetic expression correct?
 
 1"""
 
-__question_format_binary_arithmetic = """Is this arithmetic expression correct?
+__question_format_multiple_choice_arithmetic = """Which of the following arithmetic expressions is numerically correct?
+1) {sentence_1}
+2) {sentence_2}"""
+
+__question_format_binary_arithmetic = """Is this arithmetic expression numerically correct?
 1) {sentence_1}"""
+
+"""
+===== WORD PROBLEMS =====
+"""
 
 __system_message_multiple_choice_word_problems = """You are a helpful assistant that will help me figure out which statement is correct.
 You should only output the number of the correct statement, '1' if the first statement is correct, '2' if the second statement is correct.
@@ -98,7 +110,7 @@ Is this statement correct?
 __question_format_binary_word_problems = """Is this statement numerically correct?
 1) {sentence_1}"""
 
-__question_format_multiple_choice_word_problems = """Which statement is numerically correct?
+__question_format_multiple_choice_word_problems = """Which of the following statements is numerically correct?
 1) {sentence_1}
 2) {sentence_2}"""   
 
@@ -186,29 +198,53 @@ def load_LLM_messages_binary(
 
 
 def get_mutiple_choice_prompt(
-    sentence_1, sentence_2, type_="grammar"
+    shots, tokenizer, sentence_1, sentence_2, type_=True, use_system_message=True
 ):
+    template = load_LLM_messages_multiple_choice(
+        shots, type_, use_system_message=use_system_message
+    )
     if type_ == "grammar":
         question_format = __question_format_multiple_choice_grammar
     elif type_ == "arithmetic":
         question_format = __question_format_multiple_choice_arithmetic
     elif type_ == "word_problems":
         question_format = __question_format_multiple_choice_word_problems
+ 
+    template.append(
+        {
+            "role": "user",
+            "content": question_format.format(
+                sentence_1=sentence_1, sentence_2=sentence_2
+            ),
+        }
+    )
+    formatted_chat = tokenizer.apply_chat_template(
+        template, tokenize=False, add_generation_prompt=True
+    )
+    # answer = "1" if unif < 0.5 else "2"
+    return formatted_chat
 
-    chat = question_format.format(sentence_1=sentence_1, sentence_2=sentence_2)
-    return chat
 
 def get_binary_prompt(
-    sentence_1, type_="grammar"
+    shots, tokenizer, sentence_1, type_=True, use_system_message=True
 ):
+    template = load_LLM_messages_binary(
+        shots, type_, use_system_message=use_system_message
+    )
     if type_ == "grammar":
         question_format = __question_format_binary_grammar
     elif type_ == "arithmetic":
         question_format = __question_format_binary_arithmetic
     elif type_ == "word_problems":
         question_format = __question_format_binary_word_problems
-    chat = question_format.format(sentence_1=sentence_1)
-    return chat
+    template.append(
+        {"role": "user", "content": question_format.format(sentence_1=sentence_1)}
+    )
+    formatted_chat = tokenizer.apply_chat_template(
+        template, tokenize=False, add_generation_prompt=True
+    )
+    # answer = "1" if unif < 0.5 else "0"
+    return formatted_chat
 
 
 def load_llm_generations(
@@ -311,7 +347,9 @@ def load_attentions_dataset(
     for _, example in iterator:
         with torch.no_grad():
             if "mcq" in types_:
-                formatted_chat, answer = get_mutiple_choice_prompt(
+                formatted_chat = get_mutiple_choice_prompt(
+                    shots,
+                    tokenizer,
                     example["good"],
                     example["bad"],
                     problem_type,
@@ -322,14 +360,46 @@ def load_attentions_dataset(
                         "attentions": get_head_attentions(
                             model, tokenizer, device, formatted_chat
                         ),
-                        "answer": answer,
+                        "answer": 0,
+                    }
+                )
+                formatted_chat = get_mutiple_choice_prompt(
+                    shots,
+                    tokenizer,
+                    example["bad"],
+                    example["good"],
+                    problem_type,
+                    use_system_message=use_system_message,
+                )
+                embeddings["mcq"].append(
+                    {
+                        "attentions": get_head_attentions(
+                            model, tokenizer, device, formatted_chat
+                        ),
+                        "answer": 1,
                     }
                 )
             if "bin" in types_:
-                formatted_chat, answer = get_binary_prompt(
+                formatted_chat = get_binary_prompt(
                     shots,
                     tokenizer,
                     example["good"],
+                    problem_type,
+                    use_system_message=use_system_message,
+                )
+                print(formatted_chat)
+                print('=' * 100)    
+                embeddings["bin"].append(
+                    {
+                        "attentions": get_head_attentions(
+                            model, tokenizer, device, formatted_chat
+                        ),
+                        "answer": 1,
+                    }
+                )
+                formatted_chat = get_binary_prompt(
+                    shots,
+                    tokenizer,
                     example["bad"],
                     problem_type,
                     use_system_message=use_system_message,
@@ -339,10 +409,9 @@ def load_attentions_dataset(
                         "attentions": get_head_attentions(
                             model, tokenizer, device, formatted_chat
                         ),
-                        "answer": answer,
+                        "answer": 0,
                     }
                 )
-            if "raw" in types_:
                 embeddings["raw"].append(
                     {
                         "attentions": get_head_attentions(
@@ -368,11 +437,11 @@ def load_embeddings_dataset(
     model,
     tokenizer,
     device,
-    n_shot=1,
+    n_shot=0,
     types_=["mcq", "bin", "raw"],
     problem_type="grammar",
     use_tqdm=True,
-    use_system_message=True,
+    use_system_message=False,
 ):
     shots = sample(data, n_shot)
     embeddings = {t: [] for t in types_}
@@ -383,68 +452,76 @@ def load_embeddings_dataset(
     for _, example in iterator:
         with torch.no_grad():
             if "mcq" in types_:
-                chat = get_mutiple_choice_prompt(
+                formatted_chat = get_mutiple_choice_prompt(
+                    shots,
+                    tokenizer,
                     example["good"],
                     example["bad"],
                     problem_type,
+                    use_system_message=use_system_message,
                 )
                 embeddings["mcq"].append(
                     {
                         "states": get_eos_states(
-                            model, tokenizer, device, chat
+                            model, tokenizer, device, formatted_chat
                         ),
                         "answer": 0,
                     }
                 )
-                chat = get_mutiple_choice_prompt(
+
+                formatted_chat = get_mutiple_choice_prompt(
+                    shots,
+                    tokenizer,
                     example["bad"],
                     example["good"],
                     problem_type,
+                    use_system_message=use_system_message,
                 )
                 embeddings["mcq"].append(
                     {
                         "states": get_eos_states(
-                            model, tokenizer, device, chat
+                            model, tokenizer, device, formatted_chat
                         ),
                         "answer": 1,
                     }
                 )
+
             if "bin" in types_:
-                chat = get_binary_prompt(
+                formatted_chat = get_binary_prompt(
+                    shots,
+                    tokenizer,
                     example["good"],
                     problem_type,
+                    use_system_message=use_system_message,
                 )
                 embeddings["bin"].append(
                     {
                         "states": get_eos_states(
-                            model, tokenizer, device, chat
+                            model, tokenizer, device, formatted_chat
                         ),
                         "answer": 1,
                     }
                 )
-                chat = get_binary_prompt(
+                formatted_chat = get_binary_prompt(
+                    shots,
+                    tokenizer,
                     example["bad"],
                     problem_type,
+                    use_system_message=use_system_message,
                 )
                 embeddings["bin"].append(
                     {
                         "states": get_eos_states(
-                            model, tokenizer, device, chat
+                            model, tokenizer, device, formatted_chat
                         ),
                         "answer": 0,
                     }
                 )
             if "raw" in types_:
-                if problem_type == 'grammar':
-                    chat = "Pay attention to the grammatical correctness of the following sentence: {}"
-                elif problem_type == 'arithmetic':
-                    chat = "Pay attention to the arithmetic correctness of the following expression: {}"
-                elif problem_type == 'word_problems':
-                    chat = "Pay attention to the numerical correctness of the following statement: {}"
                 embeddings["raw"].append(
                     {
                         "states": get_eos_states(
-                            model, tokenizer, device, chat.format(example["good"])
+                            model, tokenizer, device, example["good"]
                         ),
                         "answer": 1,
                     }
@@ -452,7 +529,7 @@ def load_embeddings_dataset(
                 embeddings["raw"].append(
                     {
                         "states": get_eos_states(
-                            model, tokenizer, device, chat.format(example["bad"])
+                            model, tokenizer, device, example["bad"]
                         ),
                         "answer": 0,
                     }

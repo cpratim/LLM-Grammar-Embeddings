@@ -1,13 +1,13 @@
 # Fdb version 4
-["bibtex main"] 1746911142.25593 "main.aux" "main.bbl" "main" 1746911148.43825 0
-  "./references.bib" 1744685496.71097 11889 3fa50acb6d8a8802d4dc21c336431928 ""
+["bibtex main"] 1746927991.01716 "main.aux" "main.bbl" "main" 1746927991.11657 0
+  "./references.bib" 1746927990.64889 14007 f14fb05ff5a67b9f7bbe8d7603a42cc9 ""
   "/usr/share/texlive/texmf-dist/bibtex/bst/natbib/plainnat.bst" 1233624470 26816 ffe5423d2019860bad9f54bc402fac15 ""
-  "main.aux" 1746911148.20455 8901 8e84af345cfe6c66f1953994d2dfe62c "pdflatex"
+  "main.aux" 1746926577.99508 9331 1ba7f9f2d003464b4c1e6f53f8ca2328 "pdflatex"
   (generated)
   "main.bbl"
   "main.blg"
   (rewritten before read)
-["pdflatex"] 1746911147.58826 "/scratch/f00561n/LLM-Grammar-Embeddings/paper/main.tex" "main.pdf" "main" 1746911148.43844 0
+["pdflatex"] 1746926577.37173 "/scratch/f00561n/LLM-Grammar-Embeddings/paper/main.tex" "main.pdf" "main" 1746927991.11663 0
   "/etc/texmf/web2c/texmf.cnf" 1732220345.55286 475 c0e671620eb5563b2130f56340a5fde8 ""
   "/scratch/f00561n/LLM-Grammar-Embeddings/paper/main.tex" 1746911147.22255 26615 6b35b4468d2493722bca0d711c6cc8a8 ""
   "/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc" 1165713224 4850 80dc9bab7f31fb78a000ccfed0e27cab ""
@@ -168,9 +168,9 @@
   "/usr/share/texmf/web2c/texmf.cnf" 1707919699 40399 f2c302f7d2af602abb742093540a5834 ""
   "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1732221081.15889 5472669 54eaf61a88b6b7896ebd0dac973cb29c ""
   "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1732221167 8214142 d960b5a151a117bb6d4b57415aa2b68b ""
-  "main.aux" 1746911148.20455 8901 8e84af345cfe6c66f1953994d2dfe62c "pdflatex"
-  "main.bbl" 1746911142.34855 10804 a0f80ecffcb1b3cc64efa7a840d3c375 "bibtex main"
-  "main.out" 1746911148.20455 3142 cd57317120ad4f9862861c4dd8c502d1 "pdflatex"
+  "main.aux" 1746926577.99508 9331 1ba7f9f2d003464b4c1e6f53f8ca2328 "pdflatex"
+  "main.bbl" 1746927991.09789 12129 b95b4caa66e0a58a073370f32097868f "bibtex main"
+  "main.out" 1746926577.99508 3142 cd57317120ad4f9862861c4dd8c502d1 "pdflatex"
   "main.tex" 1746911147.22255 26615 6b35b4468d2493722bca0d711c6cc8a8 ""
   "neurips_2024.sty" 1739525930.40585 11550 4412c3d1f5b63ffc23832100a2bb5e33 ""
   (generated)

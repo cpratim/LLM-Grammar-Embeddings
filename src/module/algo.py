@@ -19,6 +19,7 @@ import json
 from util.data import load_numerical_data
 from random import shuffle
 from pprint import pprint
+from util.model import clear_cuda_cache
 
 
 def metric(
@@ -28,7 +29,7 @@ def metric(
     device,
     metric_type: str,
     problem_type: str,
-    D: int = 10,
+    D: int = 3,
 ):
     embeddings = load_embeddings_dataset(
         data,
@@ -91,10 +92,11 @@ def layer_select(
         
         with open(outfile, "w") as f:
             json.dump(results, f, indent=4)
+        clear_cuda_cache()
     return results
 
 
-def save_head_pool(head_pool, outfile, starting_acc, lowest_acc, i, base_acc):
+def save_head_pool(head_pool, outfile, starting_acc, lowest_acc, i, base_acc, terminated: bool = False, k_history: list = None):
     head_dict = {}
     for (l, h) in head_pool:
         if l not in head_dict:
@@ -106,6 +108,8 @@ def save_head_pool(head_pool, outfile, starting_acc, lowest_acc, i, base_acc):
         "lowest_acc": lowest_acc,
         "i": i,
         "head_pool": head_dict,
+        "terminated": terminated,
+        "k_history": k_history
     }
     with open(outfile, "w") as f:
         json.dump(res_dict, f, indent=4)
@@ -125,10 +129,11 @@ def head_select(
     device, 
     epsilon=.1,
     layer_data=None,
-    n_splits=10,
+    n_splits=20,
     metric_type="raw",
     problem_type="numerical",
-    D: int = 10,
+    D: int = 3,
+    T: int = 20,
     percentile: int = 75,
     outfile="outputs/gemma_numerical_head_pool.json",
 ):
@@ -152,25 +157,29 @@ def head_select(
             disable_head(model, l, h)
     
     starting_acc = metric(data, model, tokenizer, device, metric_type, problem_type, D=D)
+    delta = base_acc - starting_acc
     print('Starting Acc: ', starting_acc)
 
-    for l in layer_pool:
+    for l in range(n_layers):
         for h in range(n_heads):
             enable_head(model, l, h)
     
+    k_history = []
     i = 0
     while True:
+        clear_cuda_cache()
         pool_len = len(head_pool)
         if pool_len < K:
-            if K == 1:
+            if K == T:
                 break
-            K = int(np.ceil(K / 2))
+            K = max(T, int(np.ceil(K / 2)))
             print('Reducing K to ', K)
             continue
 
         pool_percent = pool_len / total_heads
         print(f"Iteration {i+1} | K = {K} | Pool = {pool_len} [{pool_percent:.2f}]")
         lowest_acc, lowest_acc_head_batch = 1, None
+        k_history.append(K)
         for _ in range(n_splits):
             head_batch = sample(head_pool, K)
             for l, h in head_pool:
@@ -190,14 +199,14 @@ def head_select(
             for h in range(n_heads):
                 enable_head(model, l, h)
 
-        if lowest_acc > starting_acc + epsilon * base_acc:
-            if K == 1:
+        if lowest_acc > starting_acc + epsilon * delta:
+            if K == T:
                 break
-            K = int(np.ceil(K / 2))
+            K = max(T, int(np.ceil(K / 2)))
             print('Reducing K to ', K)
 
         else:
-            save_head_pool(head_pool, outfile, starting_acc, lowest_acc, i, base_acc)
+            save_head_pool(head_pool, outfile, starting_acc, lowest_acc, i, base_acc, False, k_history)
             new_head_pool = []
             for l, h in head_pool:
                 if (l, h) not in lowest_acc_head_batch:
@@ -205,10 +214,10 @@ def head_select(
 
             head_pool = new_head_pool
             if K != 1 and K > .9 * len(head_pool):
-                K = int(np.ceil(K / 2))
+                K = max(T, int(np.ceil(K / 2)))
                 print('Reducing K to ', K)
                 continue
-
-        
         i += 1
+
+    save_head_pool(head_pool, outfile, starting_acc, lowest_acc, i, base_acc, True, k_history)
 

@@ -1,4 +1,4 @@
-\begin{thebibliography}{30}
+\begin{thebibliography}{35}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
@@ -25,10 +25,26 @@ Kevin Clark, Urvashi Khandelwal, Omer Levy, and Christopher~D Manning.
 \newblock What does bert look at? an analysis of bert's attention.
 \newblock In \emph{Proceedings of the 2019 ACL Workshop BlackboxNLP: Analyzing and Interpreting Neural Networks for NLP}, pages 276--286, 2019.
 
+\bibitem[Cobbe et~al.(2021)Cobbe, Kosaraju, Bavarian, et~al.]{cobbe2021training}
+Karl Cobbe, Vineet Kosaraju, Mohammad Bavarian, et~al.
+\newblock Training verifiers to solve math word problems.
+\newblock \emph{arXiv preprint arXiv:2110.14168}, 2021.
+
 \bibitem[Devlin et~al.(2019)Devlin, Chang, Lee, and Toutanova]{devlin2019bert}
 Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova.
 \newblock Bert: Pre-training of deep bidirectional transformers for language understanding.
 \newblock \emph{arXiv preprint arXiv:1810.04805}, 2019.
+
+\bibitem[Elhage et~al.(2021)Elhage, Nanda, Olsson, et~al.]{elhage2021superposition}
+Nelson Elhage, Neel Nanda, Catherine Olsson, et~al.
+\newblock A mathematical framework for transformer circuits.
+\newblock \emph{Transformer Circuits Thread}, 2021.
+\newblock \url{https://transformer-circuits.pub/2021/framework/index.html}.
+
+\bibitem[{Gemma Team}(2024)]{team2024gemma}
+{Gemma Team}.
+\newblock Gemma: Lightweight open models for language understanding.
+\newblock \emph{arXiv preprint arXiv:2402.19155}, 2024.
 
 \bibitem[Geva et~al.(2021)Geva, Schuster, Berant, and Levy]{geva2021transformer}
 Mor Geva, Roei Schuster, Jonathan Berant, and Omer Levy.
@@ -70,6 +86,12 @@ Christopher~D Manning, Kevin Clark, John Hewitt, Urvashi Khandelwal, and Omer Le
 \newblock Emergent linguistic structure in artificial neural networks trained by self-supervision.
 \newblock \emph{Proceedings of the National Academy of Sciences}, 117\penalty0 (48):\penalty0 30046--30054, 2020.
 
+\bibitem[Olah et~al.(2020)Olah, Cammarata, Schubert, et~al.]{olah2020zoom}
+Chris Olah, Nick Cammarata, Ludwig Schubert, et~al.
+\newblock Zoom in: An introduction to circuits.
+\newblock \emph{Distill}, 5\penalty0 (3):\penalty0 e00024, 2020.
+\newblock \doi{10.23915/distill.00024}.
+
 \bibitem[{OpenAI}(2023)]{openai2023gpt4}
 {OpenAI}.
 \newblock Gpt-4 technical report.
@@ -89,6 +111,11 @@ Peng Qian, Tahsina Huang, Reza Firoozi, Zhiyuan Wang, Qiyang Zhou, Eric Wong, Ke
 Adam Roberts, Albert Webson, Colin Larson, Leo Gao, Niket Tandon, Kai-Wei Tai, Hyung~Won Chung, Colin Raffel, and Gaurav Mishra.
 \newblock Quantifying language models' sensitivity to spurious features in prompt design or: How i learned to start worrying about prompt formatting.
 \newblock \emph{arXiv preprint arXiv:2310.11324}, 2023.
+
+\bibitem[Saxton et~al.(2019)Saxton, Grefenstette, Hill, and Kohli]{saxton2019analysing}
+David Saxton, Edward Grefenstette, Felix Hill, and Pushmeet Kohli.
+\newblock Analysing mathematical reasoning abilities of neural models.
+\newblock \emph{arXiv preprint arXiv:1904.01557}, 2019.
 
 \bibitem[Talmor et~al.(2020)Talmor, Elazar, Goldberg, and Berant]{talmor2020olmpics}
 Alon Talmor, Yanai Elazar, Yoav Goldberg, and Jonathan Berant.
